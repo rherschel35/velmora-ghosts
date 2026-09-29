@@ -217,6 +217,14 @@ otherwise global sync which can take up to an hour the first time).
 
 ## Notes
 
+- Prompt caching: each Claude call marks the stable personality + lore block
+  as reusable (`cache_control: ephemeral`), so repeat calls pay ~1/10 on that
+  prefix. Mood and per-call memory stay uncached.
+- Context caps (all ghosts): last **3** diary days (was 7), last **10**
+  channel messages (was 20), **15** running notes kept (was 30).
+- Chat cooldown (all ghosts): after **10** replies to the same person in
+  **10 minutes**, the ghost sends `*{name} flickers and fades…*` and stays
+  quiet toward them for **3 minutes**.
 - All dialogue is generated at request time by Claude (model overridable via
   `VELMORA_MODEL`). Fallback lines from the character YAML are used only if
   the API key is missing or a call fails.

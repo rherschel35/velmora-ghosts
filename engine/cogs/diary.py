@@ -8,7 +8,7 @@ gets very full), the ghost writes a short diary entry about it and the raw
 messages are let go.
 
 When the ghost speaks:
-- the last week of entries is always in mind, and
+- the last few days of entries are always in mind, and
 - older entries are pulled in when what's being said points at them -
   "last month", "on Halloween", "remember when Cassy...", or simply words
   that match what happened that day.
@@ -33,7 +33,7 @@ log = logging.getLogger("ghost.diary")
 DIARY_KEEP_DAYS = 400        # how many daily entries are kept (over a year)
 BUFFER_FLUSH_AT = 300        # a very busy day gets written up in parts
 BUFFER_MSG_CHARS = 200
-RECENT_DAYS_IN_MIND = 7      # always carried into a reply
+RECENT_DAYS_IN_MIND = 3      # always carried into a reply
 MAX_RECALLED = 3             # older entries pulled in per reply
 
 MONTHS = {m.lower(): i for i, m in enumerate(
@@ -302,7 +302,7 @@ class DiaryMixin:
         out = [f"\n\nTODAY IS {t.strftime('%A, %B')} {t.day}, {t.year}."]
         if recent:
             out.append(
-                "YOUR DIARY FROM THE PAST WEEK - what actually happened here, in your own words:\n"
+                "YOUR DIARY FROM THE PAST FEW DAYS - what actually happened here, in your own words:\n"
                 + "\n".join(f"- {nice_date(e['date'], today)}: {e['text']}" for e in recent)
             )
         if recalled:
