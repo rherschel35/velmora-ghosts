@@ -60,6 +60,8 @@ class GhostConfig:
     lore_fragments: list[str]
     prompt_names: dict[str, str] = field(default_factory=dict)
     interact_partners: list[InteractPartner] = field(default_factory=list)
+    # Slash-command copy + attention command name (/haunt vs /watch).
+    commands: dict[str, Any] = field(default_factory=dict)
 
     # Resolved paths / dirs
     lore_dir: Path = LORE_DIR
@@ -71,6 +73,19 @@ class GhostConfig:
             return GHOST_TAGS[self.id]
         except KeyError as exc:
             raise KeyError(f"No GHOST_TAGS entry for ghost id {self.id!r}") from exc
+
+    def cmd(self, section: str, key: str, default: str | None = None) -> str:
+        """Look up character-specific slash-command copy."""
+        block = self.commands.get(section) or {}
+        if key in block and block[key] is not None:
+            return str(block[key])
+        if default is not None:
+            return default
+        raise KeyError(f"characters/{self.id}.yaml commands.{section}.{key} is required")
+
+    def attention_command(self) -> str:
+        """Slash command name for the attention mechanic: haunt or watch."""
+        return self.cmd("attention", "command", "haunt")
 
     @property
     def history_path(self) -> Path:
@@ -188,6 +203,7 @@ def load_character(ghost_id: str | None = None) -> GhostConfig:
         lore_fragments=list(raw.get("lore_fragments") or []),
         prompt_names=dict(raw.get("prompt_names") or {}),
         interact_partners=partners,
+        commands=dict(raw.get("commands") or {}),
         state_dir=state_dir,
     )
     return cfg
