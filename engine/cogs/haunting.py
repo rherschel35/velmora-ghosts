@@ -266,11 +266,16 @@ class Haunting(commands.Cog):
             cue = f'{matched_cue} They said: "{content}"'
         elif haunted and random.random() < 0.35:
             should_respond = True
-            cue = (
-                f"You are currently fixated on haunting {author_name} specifically. "
-                f'They just said: "{content}". Slip into their conversation uninvited, '
-                "referencing what they said, as if you'd been waiting for them to speak."
-            )
+            # Character YAML supplies Mordy's /haunt cue or Finley's /watch cue.
+            cue = self.ghost.cmd(
+                "attention",
+                "passive_cue",
+                (
+                    f"You are currently fixated on haunting {author_name} specifically. "
+                    f'They just said: "{content}". Slip into their conversation uninvited, '
+                    "referencing what they said, as if you'd been waiting for them to speak."
+                ),
+            ).format(user=author_name, content=content)
         elif random.random() < 0.01:
             # rare ambient reaction to an ordinary message
             should_respond = True
