@@ -42,6 +42,16 @@ RECENT_CONTEXT_MESSAGES = 20  # raw recent messages carried into every reply
 
 MODEL = os.getenv("VELMORA_MODEL", "claude-haiku-4-5-20251001")
 
+# Characters that may stay quiet (Sebastian) reply with this exact word.
+SILENCE = "SKIP"
+
+
+def is_silence(text: str | None) -> bool:
+    """True when the model chose to stay quiet ("SKIP", maybe with stray
+    punctuation or quotes around it)."""
+    cleaned = (text or "").strip().strip("*_\"'.!").strip().upper()
+    return cleaned == SILENCE
+
 
 def _ago(ts) -> str:
     """How long ago, in plain words: 'just now', '25 min ago', '3 hours ago'."""
@@ -387,6 +397,7 @@ class Personality(DiaryMixin, commands.Cog):
         max_tokens: int = 180,
         history=None,
         direction: str | None = None,
+        allow_silence: bool = False,
     ) -> str:
         """Generate an in-character line from the ghost.
 
@@ -399,9 +410,13 @@ class Personality(DiaryMixin, commands.Cog):
         messages present as its own turns.
         direction: an extra in-character instruction appended to the system
         prompt for this one call.
+        allow_silence: for passing reactions only (Sebastian). If he'd rather
+        say nothing, returns SILENCE and the caller sends nothing. When
+        someone speaks to him directly this stays False, so he always answers.
         """
+        silence_ok = allow_silence and self.ghost.allow_silence
         if not self.client:
-            return random.choice(self.ghost.fallback_lines)
+            return SILENCE if silence_ok else random.choice(self.ghost.fallback_lines)
 
         memory_block = ""
         if memory_hint:
@@ -467,6 +482,8 @@ class Personality(DiaryMixin, commands.Cog):
             )
             text_parts = [block.text for block in resp.content if block.type == "text"]
             reply = "".join(text_parts).strip()
+            if is_silence(reply):
+                return SILENCE if silence_ok else random.choice(self.ghost.fallback_lines)
             return reply or random.choice(self.ghost.fallback_lines)
         except Exception:
             log.exception("Claude API call failed")

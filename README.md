@@ -8,6 +8,7 @@ Boot any ghost with `GHOST_ID`:
 GHOST_ID=mordy python bot.py
 GHOST_ID=finley python bot.py
 GHOST_ID=maynard python bot.py
+GHOST_ID=sebastian python bot.py
 ```
 
 Characters ported so far:
@@ -19,6 +20,9 @@ Characters ported so far:
 - **Maynard** from [Maynard-moonveil](https://github.com/rherschel35/Maynard-moonveil) —
   `/ask`, `/watch` (mischief), `/experiment`, chaotic House Moonveil voice.
   No `/interact` — he does not talk to the other ghosts.
+- **Sebastian** from [Sebastian-Thornmere](https://github.com/rherschel35/Sebastian-Thornmere) —
+  `/ask`, `/pun`, `/mazejournal`, shy Thornmere voice. No `/interact` and
+  no attention command (`/haunt`/`/watch`). Replies `SKIP` to stay quiet.
 
 With the matching `GHOST_ID`, each ghost's system prompt, moods, keywords,
 lore fragments, history pairings, and slash-command names match its original
@@ -37,6 +41,7 @@ characters/
   mordy.yaml           # Mordy: /seance /haunt /lore
   finley.yaml          # Finley: /seance /watch /lore
   maynard.yaml         # Maynard: /ask /watch /experiment
+  sebastian.yaml       # Sebastian: /ask /pun /mazejournal
 data/lore/             # shared across every ghost
   velmora_lore.json    # canonical biographies
   shared_history.json  # cross-ghost story bank
@@ -54,7 +59,7 @@ Discord bot process per ghost:
 | Mordy | `mordy` | `characters/mordy.yaml` |
 | Finley | `finley` | `characters/finley.yaml` |
 | Cassy | `cassy` | *(add `characters/cassy.yaml`)* |
-| Sebastian | `sebastian` | *(add `characters/sebastian.yaml`)* |
+| Sebastian | `sebastian` | `characters/sebastian.yaml` |
 | Maynard | `maynard` | `characters/maynard.yaml` |
 | Vida | `vida` | *(add `characters/vida.yaml`)* |
 
@@ -121,6 +126,26 @@ Same image again; Maynard does **not** use `OTHER_GHOST_*` (no `/interact`):
 mischief-interest, not Finley's protective watch. Keyword cues: `maynard`
 (always), `what if` / `prank` (~25% chance each).
 
+### Service 4 — Sebastian
+
+Same image; Sebastian has **no** attention command and **no** `/interact`:
+
+| Variable | Example / notes |
+| --- | --- |
+| `GHOST_ID` | `sebastian` |
+| `DISCORD_TOKEN` | Sebastian's Discord bot token (his own Discord app) |
+| `ANTHROPIC_API_KEY` | shared project variable is fine |
+| `STATE_DIR` | **separate** volume from the other ghosts, e.g. `/data` |
+| `HAUNT_CHANNEL_IDS` | optional channel allowlist |
+| `ALLOWED_GUILD_IDS` | optional guild allowlist |
+| `HOUSE_ROLE_ID` | optional; defaults to the Thornmere house role in YAML |
+
+`GHOST_ID=sebastian` loads `characters/sebastian.yaml` and registers
+**`/ask`**, **`/pun`**, **`/mazejournal`**, **`/mood` only**. He answers to
+`sebastian` (shy, or passionate if the talk is about the tournament), rarely
+chimes in with a pun (`SKIP` = stay quiet), and is warmer with Thornmere
+housemates. He ignores every other bot.
+
 Typical Railway setup:
 
 1. Create one Railway project for Velmora.
@@ -129,7 +154,7 @@ Typical Railway setup:
    at the same repo / same image).
 4. On each service, set `GHOST_ID` and that ghost's `DISCORD_TOKEN` (and
    `ANTHROPIC_API_KEY`, usually as a shared variable). Copy the tables above
-   for Mordy, Finley, and Maynard; add the remaining three as their YAMLs land.
+   for Mordy, Finley, Maynard, and Sebastian; add Cassy/Vida as their YAMLs land.
 5. Attach a **separate** volume to each service and set `STATE_DIR` to the
    mount path.
 
@@ -144,7 +169,7 @@ new YAML under `characters/` plus another Railway service with a new
    - Invite it with the `bot` and `applications.commands` scopes, and at least:
      View Channels, Send Messages, Read Message History.
 2. `cp .env.example .env` and fill in `DISCORD_TOKEN`, `ANTHROPIC_API_KEY`,
-   and `GHOST_ID` (`mordy`, `finley`, or `maynard`).
+   and `GHOST_ID` (`mordy`, `finley`, `maynard`, or `sebastian`).
 3. `pip install -r requirements.txt`
 4. `python bot.py` (or `python -m engine`)
 
@@ -176,6 +201,15 @@ otherwise global sync which can take up to an hour the first time).
 - `/experiment` — an entry from his old journals of (alleged) experiments.
 - `/mood` — (admin) peek at the current mood.
 - No `/interact` — he keeps to the students and ignores other ghost bots.
+
+**Sebastian** (`GHOST_ID=sebastian`):
+
+- `/ask question:<text>` — ask Sebastian; shy, gentle answer (tournament talk unlocks passion).
+- `/pun [topic]` — coax one gentle groan-worthy pun out of him.
+- `/mazejournal` — a page from his old maze journals plus his shy reaction.
+- `/mood` — (admin) peek at the current mood.
+- No `/haunt` or `/watch`, and no `/interact` — he ignores other bots entirely.
+  Unasked reactions may reply `SKIP` (send nothing).
 
 ## Notes
 

@@ -28,6 +28,7 @@ import discord
 from discord.ext import commands
 
 from engine.config import INTERACT_MARKER
+from engine.cogs.personality import is_silence
 
 log = logging.getLogger("velmora.haunting")
 
@@ -66,20 +67,59 @@ class Haunting(commands.Cog):
             self.ghost.haunt("chime_cooldown_seconds", 0) or 0
         )
         self._last_chime: dict[int, float] = {}
+        # Sebastian: at most one unasked housemate chime per channel per cooldown.
+        self._house_chime_cooldown = int(
+            self.ghost.haunt("house_chime_cooldown_seconds", 0) or 0
+        )
+        self._last_house_chime: dict[int, float] = {}
+        tournament_pat = self.ghost.haunt("tournament_pattern")
+        self._tournament_pattern = (
+            re.compile(tournament_pat, re.IGNORECASE) if tournament_pat else None
+        )
 
     def _chime_ready(self, channel_id: int) -> bool:
         if self._chime_cooldown <= 0:
             return True
         return time.time() - self._last_chime.get(channel_id, 0) >= self._chime_cooldown
 
-    def match_keyword(self, content: str, rng=random):
+    def _house_chime_ready(self, channel_id: int) -> bool:
+        if self._house_chime_cooldown <= 0:
+            return True
+        return (
+            time.time() - self._last_house_chime.get(channel_id, 0)
+            >= self._house_chime_cooldown
+        )
+
+    def is_tournament_talk(self, content: str) -> bool:
+        if not self._tournament_pattern:
+            return False
+        return bool(self._tournament_pattern.search(content or ""))
+
+    def match_keyword(self, content: str, rng=random, housemate: bool = False):
         """Return (keyword, cue_or_None).
 
         cue is None when a keyword matched but its chance roll failed (Maynard's
         what-if/prank are ~25%). Callers must not fall through to ambient asides
         in that case. Plain string triggers (Mordy/Finley) always have chance 1.0.
+
+        Sebastian: name is the only trigger; tournament talk or housemate status
+        swaps the cue (and the keyword label used for token budgets).
         """
         lowered = (content or "").lower().replace("'", "").replace("\u2019", "")
+        name_keyword = (self.ghost.haunt("name_keyword") or "").lower()
+
+        # Sebastian-style name-only matching with tournament / house variants.
+        if name_keyword and self.ghost.haunt("tournament_cue"):
+            pattern = self._keyword_patterns.get(name_keyword)
+            if not pattern or not pattern.search(lowered):
+                return None, None
+            if self.is_tournament_talk(content):
+                return "tournament", str(self.ghost.haunt("tournament_cue"))
+            if housemate and self.ghost.haunt("house_name_cue"):
+                return "house", str(self.ghost.haunt("house_name_cue"))
+            trigger = self.ghost.keyword_triggers.get(name_keyword)
+            return name_keyword, (trigger.cue if trigger else None)
+
         for keyword, trigger in self.ghost.keyword_triggers.items():
             if self._keyword_patterns[keyword].search(lowered):
                 if trigger.chance >= 1.0 or rng.random() < trigger.chance:
@@ -211,24 +251,53 @@ class Haunting(commands.Cog):
                     "content": f"{self.ghost.speaker_label(msg.author)}: {text}",
                 })
 
-        if replying_to_me:
+        housemate = self.ghost.is_housemate(message.author)
+        if housemate and self.ghost.haunt("house_role_name"):
             direction = (
-                "Someone has just replied directly to something you said, and their reply is the last "
-                "message above. Answer them, in character, carrying on naturally from your own last "
-                "message. Everything above is a real exchange you were part of - never say you don't "
-                "remember it, never question whether you said it, and never apologise or break character "
-                "to explain yourself. Keep it to a couple of sentences."
+                "One of your own Thornmere students is talking to you directly - the last message above. "
+                "With your own house you're at ease: warm, glad they came to you, and happy to talk. Answer "
+                "in two or three sentences, carry on naturally from anything you said before, and feel free "
+                "to ask them something back. Everything above is a real exchange you were part of - never say "
+                "you don't remember it or break character. If it's about the tournament, your passion takes over."
             )
+        elif replying_to_me:
+            if self.ghost.allow_silence:
+                direction = (
+                    "Someone has just replied directly to something you said, and their reply is the last "
+                    "message above. Answer them, in character, carrying on naturally from your own last "
+                    "message. Everything above is a real exchange you were part of - never say you don't "
+                    "remember it, never question whether you said it, and never apologise or break character "
+                    "to explain yourself. Stay shy - a sentence or two at most - unless the talk is about the "
+                    "tournament, where your passion takes over."
+                )
+            else:
+                direction = (
+                    "Someone has just replied directly to something you said, and their reply is the last "
+                    "message above. Answer them, in character, carrying on naturally from your own last "
+                    "message. Everything above is a real exchange you were part of - never say you don't "
+                    "remember it, never question whether you said it, and never apologise or break character "
+                    "to explain yourself. Keep it to a couple of sentences."
+                )
         else:
-            direction = (
-                "Someone has just spoken to you directly, by name. Answer them in character, briefly."
-            )
+            if self.ghost.allow_silence:
+                direction = (
+                    "Someone has just spoken to you directly. Answer them in character - shy, brief, "
+                    "a little flustered to be noticed, but you DO answer. If it's about the tournament, "
+                    "the shyness falls away and your passion shows."
+                )
+            else:
+                direction = (
+                    "Someone has just spoken to you directly, by name. Answer them in character, briefly."
+                )
 
         speaker = self.ghost.speaker_label(message.author)
+        if housemate and self.ghost.haunt("house_role_name"):
+            speaker = f"{message.author.display_name} (a Thornmere student - your house)"
+        tokens = 260 if (housemate or self.ghost.allow_silence) else 200
         async with message.channel.typing():
             line = await personality.speak(
                 f"{speaker}: {asked}",
-                max_tokens=200,
+                max_tokens=tokens,
                 history=history,
                 direction=direction,
             )
@@ -260,6 +329,7 @@ class Haunting(commands.Cog):
         content = message.content or ""
         plain_name = str(message.author.display_name)
         author_name = self.ghost.speaker_label(message.author)
+        housemate = self.ghost.is_housemate(message.author)
 
         # Remember most messages with enough substance, so the ghost has
         # material to resurface later. Skip very short/low-content ones.
@@ -275,31 +345,62 @@ class Haunting(commands.Cog):
             return
 
         haunted = personality.is_haunted(message.author.id)
-        keyword, matched_cue = self.match_keyword(content)
+        keyword, matched_cue = self.match_keyword(content, housemate=housemate)
         name_keyword = (self.ghost.haunt("name_keyword") or "").lower()
         attention_chance = float(self.ghost.haunt("attention_chance", 0.35))
         random_chance = float(self.ghost.haunt("random_chance", 0.01))
+        pun_chance = float(self.ghost.haunt("pun_chance", 0) or 0)
+        house_chime_chance = float(self.ghost.haunt("house_chime_chance", 0) or 0)
 
         cue = None
         unasked = True
+        allow_silence = False
+        tokens = 180
 
-        if keyword and matched_cue and name_keyword and keyword == name_keyword:
-            # Called by name (Maynard): always answer, cooldown or not.
+        if keyword and matched_cue and name_keyword and keyword in (
+            name_keyword, "tournament", "house"
+        ):
+            # Called by name (Maynard always / Sebastian shy|tournament|house).
             unasked = False
-            cue = f'{matched_cue} {author_name} said: "{content}"'
+            if self.ghost.haunt("tournament_cue"):
+                speaker = (
+                    f"{author_name}, a Thornmere student,"
+                    if housemate else "They"
+                )
+                cue = f'{matched_cue} {speaker} said: "{content}"'
+                name_tokens = self.ghost.haunt("name_tokens") or {}
+                tokens = int(name_tokens.get(keyword, 120))
+            else:
+                cue = f'{matched_cue} {author_name} said: "{content}"'
         elif self._chime_cooldown > 0 and not self._chime_ready(message.channel.id):
             return
         elif matched_cue:
             # Mordy/Finley keep the original "They said" cue wording; Maynard
             # (with a name_keyword configured) uses the speaker label.
-            if name_keyword:
+            if name_keyword and not self.ghost.haunt("tournament_cue"):
                 cue = f'{matched_cue} {author_name} said: "{content}"'
-            else:
+            elif not name_keyword:
                 cue = f'{matched_cue} They said: "{content}"'
+            else:
+                cue = f'{matched_cue} {author_name} said: "{content}"'
         elif keyword:
             # Keyword heard but chance failed — stay quiet; don't ambient-aside.
             return
-        elif haunted and random.random() < attention_chance:
+        elif (
+            housemate
+            and house_chime_chance > 0
+            and len(content.strip()) >= 12
+            and self._house_chime_ready(message.channel.id)
+            and random.random() < house_chime_chance
+        ):
+            self._last_house_chime[message.channel.id] = time.time()
+            house_cue = str(self.ghost.haunt("house_chime_cue") or "").format(
+                content=content
+            )
+            cue = f"{author_name}: {house_cue}"
+            allow_silence = True
+            tokens = 120
+        elif haunted and self.ghost.has_attention_command() and random.random() < attention_chance:
             cue = self.ghost.cmd(
                 "attention",
                 "passive_cue",
@@ -309,7 +410,17 @@ class Haunting(commands.Cog):
                     "referencing what they said, as if you'd been waiting for them to speak."
                 ),
             ).format(user=author_name, content=content)
-        elif random.random() < random_chance:
+        elif pun_chance > 0 and len(content.strip()) >= 12 and random.random() < pun_chance:
+            pun_cue = self.ghost.haunt("pun_cue")
+            cue = str(pun_cue).format(content=content) if pun_cue else (
+                f'Someone said: "{content}". Only if a good pun fits, slip it in. '
+                "Otherwise reply with exactly SKIP."
+            )
+            allow_silence = True
+            tokens = 120
+        elif random.random() < random_chance and not self.ghost.haunt("tournament_cue"):
+            # Mordy/Finley/Maynard ambient asides — Sebastian stays quieter
+            # (pun_chance path above is his only unasked channel).
             random_cue = self.ghost.commands.get("attention", {}).get("random_cue")
             if random_cue:
                 cue = str(random_cue).format(content=content, user=author_name)
@@ -324,11 +435,23 @@ class Haunting(commands.Cog):
         if unasked and self._chime_cooldown > 0:
             self._last_chime[message.channel.id] = time.time()
 
-        async with message.channel.typing():
+        if keyword and not allow_silence:
+            async with message.channel.typing():
+                line = await personality.speak(cue, max_tokens=tokens)
+        else:
             memory_hint = None
-            if random.random() < 0.3:
+            if not allow_silence and random.random() < 0.3:
                 memory_hint = personality.random_memory(exclude_author=plain_name)
-            line = await personality.speak(cue, memory_hint=memory_hint)
+            if allow_silence:
+                line = await personality.speak(
+                    cue, max_tokens=tokens, allow_silence=True
+                )
+            else:
+                async with message.channel.typing():
+                    line = await personality.speak(cue, memory_hint=memory_hint)
+
+        if is_silence(line):
+            return
 
         try:
             await message.channel.send(line)
