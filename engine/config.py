@@ -27,6 +27,7 @@ GHOST_TAGS = {
     "finley": "\u2061",
     "cassy": "\u2062",
     "maynard": "\u2063",
+    "sebastian": "\u2064",
 }
 
 # Trailing zero-width space marking genuine /interact traffic.
@@ -82,6 +83,8 @@ class GhostConfig:
     # Optional passive-haunting knobs (Maynard: cooldown, lower chances, etc.).
     haunting: dict[str, Any] = field(default_factory=dict)
     headmaster_role_id: int | None = None
+    # When True, speak(allow_silence=True) may return SKIP / stay quiet.
+    allow_silence: bool = False
 
     # Resolved paths / dirs
     lore_dir: Path = LORE_DIR
@@ -107,6 +110,18 @@ class GhostConfig:
         """Slash command name for a logical section (seance/attention/lore)."""
         return self.cmd(section, "command", default)
 
+    def has_attention_command(self) -> bool:
+        """False for characters like Sebastian who have no /haunt or /watch."""
+        attn = self.commands.get("attention")
+        if not attn:
+            return False
+        if attn.get("enabled") is False:
+            return False
+        return True
+
+    def has_pun_command(self) -> bool:
+        return bool(self.commands.get("pun"))
+
     def attention_command(self) -> str:
         """Slash command name for the attention mechanic: haunt or watch."""
         return self.command_name("attention", "haunt")
@@ -116,6 +131,26 @@ class GhostConfig:
 
     def lore_command(self) -> str:
         return self.command_name("lore", "lore")
+
+    def house_role_id(self) -> int:
+        env = os.getenv("HOUSE_ROLE_ID")
+        if env and env.isdigit():
+            return int(env)
+        raw = self.haunt("house_role_id", 0) or 0
+        return int(raw)
+
+    def is_housemate(self, member) -> bool:
+        """True if member has this ghost's house role (Sebastian / Thornmere)."""
+        role_id = self.house_role_id()
+        role_name = str(self.haunt("house_role_name") or "").strip().lower()
+        if not role_id and not role_name:
+            return False
+        for role in getattr(member, "roles", None) or []:
+            if role_id and role.id == role_id:
+                return True
+            if role_name and (role.name or "").strip().lower() == role_name:
+                return True
+        return False
 
     def haunt(self, key: str, default: Any = None) -> Any:
         if key in self.haunting:
@@ -305,6 +340,7 @@ def load_character(ghost_id: str | None = None) -> GhostConfig:
         commands=dict(raw.get("commands") or {}),
         haunting=dict(raw.get("haunting") or {}),
         headmaster_role_id=headmaster_role_id,
+        allow_silence=bool(raw.get("allow_silence", False)),
         state_dir=state_dir,
     )
     return cfg

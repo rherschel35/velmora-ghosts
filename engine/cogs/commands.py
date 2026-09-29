@@ -112,7 +112,11 @@ class GhostCommands(commands.Cog):
                 f'{asker} has called a seance and asks you directly: "{question}". '
                 f"Answer as the ghost - {answer_style}"
             )
-        line = await personality.speak(cue, memory_hint=memory_hint, max_tokens=220)
+        line = await personality.speak(
+            cue,
+            memory_hint=memory_hint,
+            max_tokens=int(self.ghost.commands.get("seance", {}).get("max_tokens") or 220),
+        )
 
         embed = discord.Embed(
             description=line,
@@ -130,7 +134,8 @@ class GhostCommands(commands.Cog):
     )
     @app_commands.describe(user="Who should the ghost fixate on?")
     async def attention(self, interaction: discord.Interaction, user: discord.Member):
-        """Attention mechanic — renamed to /haunt or /watch in setup()."""
+        """Attention mechanic — renamed to /haunt or /watch in setup();
+        omitted entirely for characters with attention.enabled: false."""
         personality = self._personality()
         if not personality:
             await interaction.response.send_message(
@@ -159,9 +164,40 @@ class GhostCommands(commands.Cog):
         embed.set_footer(text=footer)
         await interaction.response.send_message(embed=embed)
 
+    @app_commands.command(name="pun", description="Coax a pun out of the ghost.")
+    @app_commands.describe(topic="Optional: something for the pun to be about")
+    async def pun(self, interaction: discord.Interaction, topic: str | None = None):
+        """Sebastian-only slash command — registered only when commands.pun is set."""
+        personality = self._personality()
+        if not personality:
+            await interaction.response.send_message(
+                self.ghost.cmd("pun", "unavailable", "*silence.*"),
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer(thinking=True)
+
+        asker = str(interaction.user.display_name)
+        about = f' about "{topic}"' if topic else ""
+        cue = self.ghost.cmd("pun", "cue").format(asker=asker, about=about, topic=topic or "")
+        line = await personality.speak(
+            cue,
+            max_tokens=int(self.ghost.commands.get("pun", {}).get("max_tokens") or 100),
+        )
+
+        embed = discord.Embed(
+            description=line,
+            color=_embed_color(self.ghost.cmd("pun", "embed_color", "dark_grey")),
+        )
+        footer = self.ghost.commands.get("pun", {}).get("footer")
+        if footer:
+            embed.set_footer(text=str(footer))
+        await interaction.followup.send(embed=embed)
+
     @app_commands.command(name="lore", description="Ask the ghost to reveal a fragment of Velmora's past.")
     async def lore(self, interaction: discord.Interaction):
-        """Lore/journal mechanic — renamed to /lore or /experiment in setup()."""
+        """Lore/journal mechanic — /lore, /experiment, or /mazejournal."""
         personality = self._personality()
         if not personality:
             await interaction.response.send_message(
@@ -171,35 +207,46 @@ class GhostCommands(commands.Cog):
 
         await interaction.response.defer(thinking=True)
 
+        lore_cfg = self.ghost.commands.get("lore") or {}
         fragment = personality.next_lore_fragment(self.lore_fragments)
         if fragment is None:
             line = await personality.speak(
                 self.ghost.cmd("lore", "exhausted_cue"),
-                max_tokens=120,
+                max_tokens=int(lore_cfg.get("exhausted_max_tokens") or 120),
             )
             embed = discord.Embed(description=line, color=discord.Color.dark_grey())
             await interaction.followup.send(embed=embed)
             return
 
         cue = self.ghost.cmd("lore", "share_cue").format(fragment=fragment)
-        # Maynard's journal entries run a bit longer than Mordy/Finley lore.
-        max_tokens = 220 if self.ghost.lore_command() == "experiment" else 200
+        max_tokens = int(lore_cfg.get("max_tokens") or (
+            220 if self.ghost.lore_command() == "experiment" else 200
+        ))
         line = await personality.speak(cue, max_tokens=max_tokens)
 
         remaining = len(self.lore_fragments) - personality.state.get("lore_index", 0)
         entry_word = "entry" if remaining == 1 else "entries"
-        embed = discord.Embed(
-            title=self.ghost.cmd("lore", "title", "A fragment surfaces..."),
-            description=line,
-            color=_embed_color(self.ghost.cmd("lore", "embed_color", "dark_teal")),
-        )
-        embed.set_footer(
-            text=self.ghost.cmd(
-                "lore",
-                "footer",
-                "{remaining} fragment(s) of Velmora's past remain untold.",
-            ).format(remaining=remaining, entry_word=entry_word)
-        )
+        pages_suffix = "" if remaining == 1 else "s"
+        color = _embed_color(self.ghost.cmd("lore", "embed_color", "dark_teal"))
+        title = self.ghost.cmd("lore", "title", "A fragment surfaces...")
+        footer = self.ghost.cmd(
+            "lore",
+            "footer",
+            "{remaining} fragment(s) of Velmora's past remain untold.",
+        ).format(remaining=remaining, entry_word=entry_word, pages_suffix=pages_suffix)
+
+        # Sebastian's /mazejournal shows the journal page plus his reaction.
+        if lore_cfg.get("show_fragment"):
+            embed = discord.Embed(
+                title=title,
+                description=f"*{fragment}*",
+                color=color,
+            )
+            field_name = str(lore_cfg.get("reaction_field") or self.ghost.resolved_name())
+            embed.add_field(name=field_name, value=line[:1024], inline=False)
+        else:
+            embed = discord.Embed(title=title, description=line, color=color)
+        embed.set_footer(text=footer)
         await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="mood", description="(admin) Peek at the ghost's current mood.")
@@ -288,7 +335,8 @@ async def setup(bot: commands.Bot):
     ghost = bot.ghost
 
     # Wire slash command names from character YAML so Mordy/Finley keep
-    # /seance+/haunt+/lore while Maynard gets /ask+/watch+/experiment.
+    # /seance+/haunt+/lore, Maynard gets /ask+/watch+/experiment, and
+    # Sebastian gets /ask+/mazejournal (no attention) plus /pun.
     _rename_command(
         cog.seance,
         ghost.seance_command(),
@@ -301,22 +349,27 @@ async def setup(bot: commands.Bot):
             "What do you want to ask it?",
         )
 
-    _rename_command(
-        cog.attention,
-        ghost.attention_command(),
-        ghost.cmd("attention", "description", cog.attention.description),
-    )
-    if "user" in cog.attention._params:
-        user_param = cog.attention._params["user"]
-        user_param.description = ghost.cmd(
-            "attention",
-            "user_describe",
-            "Who should the ghost fixate on?",
+    if ghost.has_attention_command():
+        _rename_command(
+            cog.attention,
+            ghost.attention_command(),
+            ghost.cmd("attention", "description", cog.attention.description),
         )
-        # Maynard's old bot exposed the option as `member` rather than `user`.
-        rename_to = ghost.commands.get("attention", {}).get("user_param")
-        if rename_to and rename_to != "user":
-            user_param._rename = rename_to
+        if "user" in cog.attention._params:
+            user_param = cog.attention._params["user"]
+            user_param.description = ghost.cmd(
+                "attention",
+                "user_describe",
+                "Who should the ghost fixate on?",
+            )
+            # Maynard's old bot exposed the option as `member` rather than `user`.
+            rename_to = ghost.commands.get("attention", {}).get("user_param")
+            if rename_to and rename_to != "user":
+                user_param._rename = rename_to
+    else:
+        cog.__cog_app_commands__ = [
+            cmd for cmd in cog.__cog_app_commands__ if getattr(cmd, "name", None) != "haunt"
+        ]
 
     _rename_command(
         cog.lore,
@@ -324,13 +377,23 @@ async def setup(bot: commands.Bot):
         ghost.cmd("lore", "description", cog.lore.description),
     )
 
+    if ghost.has_pun_command():
+        pun_cfg = ghost.commands.get("pun") or {}
+        cog.pun.description = str(pun_cfg.get("description") or cog.pun.description)
+        if "topic" in cog.pun._params and pun_cfg.get("topic_describe"):
+            cog.pun._params["topic"].description = str(pun_cfg["topic_describe"])
+    else:
+        cog.__cog_app_commands__ = [
+            cmd for cmd in cog.__cog_app_commands__ if getattr(cmd, "name", None) != "pun"
+        ]
+
     partners = ghost.interact_partners
     if partners:
         choices = [app_commands.Choice(name=p.name, value=p.id) for p in partners]
         cog.interact_command._params["who"].choices = choices
     else:
-        # Characters without peer ghosts don't expose /interact (e.g. Maynard).
+        # Characters without peer ghosts don't expose /interact (Maynard, Sebastian).
         cog.__cog_app_commands__ = [
-            cmd for cmd in cog.__cog_app_commands__ if cmd.name != "interact"
+            cmd for cmd in cog.__cog_app_commands__ if getattr(cmd, "name", None) != "interact"
         ]
     await bot.add_cog(cog)
