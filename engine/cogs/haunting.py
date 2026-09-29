@@ -293,6 +293,16 @@ class Haunting(commands.Cog):
         speaker = self.ghost.speaker_label(message.author)
         if housemate and self.ghost.haunt("house_role_name"):
             speaker = f"{message.author.display_name} (a Thornmere student - your house)"
+
+        gate = personality.chat_gate(message.author.id)
+        if gate is not None:
+            if gate:
+                try:
+                    await message.reply(gate, mention_author=False)
+                except discord.HTTPException:
+                    log.exception("Failed to send fade line in %s", message.channel.id)
+            return True
+
         tokens = 260 if (housemate or self.ghost.allow_silence) else 200
         async with message.channel.typing():
             line = await personality.speak(
@@ -302,10 +312,15 @@ class Haunting(commands.Cog):
                 direction=direction,
             )
 
+        if is_silence(line):
+            return True
+
         try:
             await message.reply(line, mention_author=False)
         except discord.HTTPException:
             log.exception("Failed to answer direct address in %s", message.channel.id)
+            return True
+        personality.record_chat_reply(message.author.id)
         return True
 
     @commands.Cog.listener()
@@ -435,6 +450,15 @@ class Haunting(commands.Cog):
         if not cue:
             return
 
+        gate = personality.chat_gate(message.author.id)
+        if gate is not None:
+            if gate:
+                try:
+                    await message.channel.send(gate)
+                except discord.HTTPException:
+                    log.exception("Failed to send fade line in %s", message.channel.id)
+            return
+
         if unasked and self._chime_cooldown > 0:
             self._last_chime[message.channel.id] = time.time()
 
@@ -462,6 +486,8 @@ class Haunting(commands.Cog):
             await message.channel.send(line)
         except discord.HTTPException:
             log.exception("Failed to send haunting reaction in %s", message.channel.id)
+            return
+        personality.record_chat_reply(message.author.id)
 
 
 async def setup(bot: commands.Bot):

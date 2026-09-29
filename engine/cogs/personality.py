@@ -37,10 +37,16 @@ log = logging.getLogger("velmora.personality")
 NOTES_EVERY_N_MESSAGES = 25   # condense after this many new remembered messages
 NOTES_SOURCE_MESSAGES = 30    # how much recent talk to condense from
 NOTES_INJECTED = 8            # how many notes the ghost carries into a reply
-MAX_NOTES = 30                # total notes kept before the oldest fall away
-RECENT_CONTEXT_MESSAGES = 20  # raw recent messages carried into every reply
+MAX_NOTES = 15                # total notes kept before the oldest fall away
+RECENT_CONTEXT_MESSAGES = 10  # raw recent messages carried into every reply
 
 MODEL = os.getenv("VELMORA_MODEL", "claude-haiku-4-5-20251001")
+
+# Per-person chat budget: after this many ghost replies in the window,
+# the ghost fades for a few minutes so one conversation can't rack up cost.
+CHAT_REPLY_LIMIT = 10
+CHAT_WINDOW_SECONDS = 10 * 60
+CHAT_COOLDOWN_SECONDS = 3 * 60
 
 # Characters that may stay quiet (Sebastian) reply with this exact word.
 SILENCE = "SKIP"
@@ -168,6 +174,12 @@ class Personality(DiaryMixin, commands.Cog):
             self.ghost.self_lore_key,
         )
 
+        # Per-person reply timestamps + cooldown-until (in-memory; resets on redeploy).
+        self._chat_reply_times: dict[int, list[float]] = {}
+        self._chat_cooldown_until: dict[int, float] = {}
+        # One fade announcement per cooldown stretch so we don't spam the line.
+        self._chat_fade_sent: set[int] = set()
+
         # Long-term memory: seed the diary from what's already remembered (first
         # run only), and write up any finished days still waiting.
         self.diary_backfill_from_memories()
@@ -186,6 +198,9 @@ class Personality(DiaryMixin, commands.Cog):
                     loaded = json.load(f)
                 state = _default_state(self.ghost.moods)
                 state.update(loaded)
+                notes = state.get("notes") or []
+                if len(notes) > MAX_NOTES:
+                    state["notes"] = notes[-MAX_NOTES:]
                 return state
             except (json.JSONDecodeError, OSError):
                 log.exception("Failed to load memory store, starting fresh")
@@ -219,6 +234,44 @@ class Personality(DiaryMixin, commands.Cog):
                 self.state["mood_set_at"] = time.time()
                 self.save_state()
                 log.info("Ghost mood shifted to %s", new_mood)
+
+    # ---------- per-person chat cooldown ----------
+
+    def chat_gate(self, user_id: int) -> str | None:
+        """Throttle heavy one-on-one chat so a single person can't burn tokens.
+
+        Returns:
+          - a fade line the first time the limit is hit (send that once),
+          - "" while the cooldown is still running (send nothing),
+          - None when it's fine to call Claude as usual.
+        """
+        now = time.time()
+        until = self._chat_cooldown_until.get(user_id, 0.0)
+        if now < until:
+            if user_id in self._chat_fade_sent:
+                return ""
+            self._chat_fade_sent.add(user_id)
+            return f"*{self.ghost.resolved_name()} flickers and fades…*"
+
+        # Cooldown expired — clear fade marker.
+        self._chat_fade_sent.discard(user_id)
+        self._chat_cooldown_until.pop(user_id, None)
+
+        times = [
+            t for t in self._chat_reply_times.get(user_id, [])
+            if now - t < CHAT_WINDOW_SECONDS
+        ]
+        self._chat_reply_times[user_id] = times
+        if len(times) >= CHAT_REPLY_LIMIT:
+            self._chat_cooldown_until[user_id] = now + CHAT_COOLDOWN_SECONDS
+            self._chat_reply_times[user_id] = []
+            self._chat_fade_sent.add(user_id)
+            return f"*{self.ghost.resolved_name()} flickers and fades…*"
+        return None
+
+    def record_chat_reply(self, user_id: int) -> None:
+        """Count a real Claude reply toward this person's chat budget."""
+        self._chat_reply_times.setdefault(user_id, []).append(time.time())
 
     # ---------- memory of things members said ----------
 
@@ -469,18 +522,33 @@ class Personality(DiaryMixin, commands.Cog):
                 "something said recently, this is where the answer is. Don't recite it unprompted."
             )
 
-        # Long-term memory: the past week's diary, plus any older days that
+        # Long-term memory: recent diary days, plus any older days that
         # what's being said points back to.
         memory_block += self.diary_block(user_prompt)
 
-        system = self.ghost.system_prompt.format(
+        # Split system prompt so the stable personality + lore can be prompt-
+        # cached (~1/10 the input price on cache hits). Mood + per-call memory
+        # stay in a second uncached block.
+        static_system = self.ghost.system_prompt.format(
             **self.ghost.prompt_format_kwargs(),
             mood=self.current_mood(),
             lore_block=self.lore_block,
-            memory_block=memory_block,
+            memory_block="",
         )
+        dynamic_bits = []
+        if memory_block.strip():
+            dynamic_bits.append(memory_block.strip())
         if direction:
-            system += "\n\n" + direction
+            dynamic_bits.append(direction)
+        system: list[dict] = [
+            {
+                "type": "text",
+                "text": static_system,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ]
+        if dynamic_bits:
+            system.append({"type": "text", "text": "\n\n".join(dynamic_bits)})
 
         try:
             resp = await self.client.messages.create(
