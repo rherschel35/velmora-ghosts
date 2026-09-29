@@ -9,6 +9,7 @@ GHOST_ID=mordy python bot.py
 GHOST_ID=finley python bot.py
 GHOST_ID=maynard python bot.py
 GHOST_ID=sebastian python bot.py
+GHOST_ID=vida python bot.py
 ```
 
 Characters ported so far:
@@ -23,6 +24,10 @@ Characters ported so far:
 - **Sebastian** from [Sebastian-Thornmere](https://github.com/rherschel35/Sebastian-Thornmere) —
   `/ask`, `/pun`, `/mazejournal`, shy Thornmere voice. No `/interact` and
   no attention command (`/haunt`/`/watch`). Replies `SKIP` to stay quiet.
+- **Vida** from [Vida-Vashara](https://github.com/rherschel35/Vida-Vashara) —
+  `/ask`, `/tend` (gentle check-ins), `/remedy`, warm House Vashara voice.
+  No `/interact` — she ignores other ghost bots. Keyword phrases include
+  `vida`, `i don't feel well`, and `can't sleep` (all always-on).
 
 With the matching `GHOST_ID`, each ghost's system prompt, moods, keywords,
 lore fragments, history pairings, and slash-command names match its original
@@ -42,6 +47,7 @@ characters/
   finley.yaml          # Finley: /seance /watch /lore
   maynard.yaml         # Maynard: /ask /watch /experiment
   sebastian.yaml       # Sebastian: /ask /pun /mazejournal
+  vida.yaml            # Vida: /ask /tend /remedy
 data/lore/             # shared across every ghost
   velmora_lore.json    # canonical biographies
   shared_history.json  # cross-ghost story bank
@@ -61,7 +67,7 @@ Discord bot process per ghost:
 | Cassy | `cassy` | *(add `characters/cassy.yaml`)* |
 | Sebastian | `sebastian` | `characters/sebastian.yaml` |
 | Maynard | `maynard` | `characters/maynard.yaml` |
-| Vida | `vida` | *(add `characters/vida.yaml`)* |
+| Vida | `vida` | `characters/vida.yaml` |
 
 Each service gets its own variables and (recommended) its own volume:
 
@@ -146,6 +152,24 @@ Same image; Sebastian has **no** attention command and **no** `/interact`:
 chimes in with a pun (`SKIP` = stay quiet), and is warmer with Thornmere
 housemates. He ignores every other bot.
 
+### Service 6 — Vida
+
+Same image; Vida has **no** `/interact` and **no** `OTHER_GHOST_*` vars:
+
+| Variable | Example / notes |
+| --- | --- |
+| `GHOST_ID` | `vida` |
+| `DISCORD_TOKEN` | Vida's Discord bot token (her own Discord app) |
+| `ANTHROPIC_API_KEY` | shared project variable is fine |
+| `STATE_DIR` | **separate** volume from the other ghosts, e.g. `/data` |
+| `HAUNT_CHANNEL_IDS` | optional channel allowlist |
+| `ALLOWED_GUILD_IDS` | optional guild allowlist |
+
+`GHOST_ID=vida` loads `characters/vida.yaml` and registers **`/ask`**,
+**`/tend`**, **`/remedy`**, **`/mood`**. She reacts to her name and the
+phrases `i don't feel well` and `can't sleep`, gives gentler passive
+check-ins after `/tend`, and ignores every other bot.
+
 Typical Railway setup:
 
 1. Create one Railway project for Velmora.
@@ -154,7 +178,7 @@ Typical Railway setup:
    at the same repo / same image).
 4. On each service, set `GHOST_ID` and that ghost's `DISCORD_TOKEN` (and
    `ANTHROPIC_API_KEY`, usually as a shared variable). Copy the tables above
-   for Mordy, Finley, Maynard, and Sebastian; add Cassy/Vida as their YAMLs land.
+   for Mordy, Finley, Maynard, Sebastian, and Vida; add Cassy when her YAML lands.
 5. Attach a **separate** volume to each service and set `STATE_DIR` to the
    mount path.
 
@@ -169,7 +193,7 @@ new YAML under `characters/` plus another Railway service with a new
    - Invite it with the `bot` and `applications.commands` scopes, and at least:
      View Channels, Send Messages, Read Message History.
 2. `cp .env.example .env` and fill in `DISCORD_TOKEN`, `ANTHROPIC_API_KEY`,
-   and `GHOST_ID` (`mordy`, `finley`, `maynard`, or `sebastian`).
+   and `GHOST_ID` (`mordy`, `finley`, `maynard`, `sebastian`, or `vida`).
 3. `pip install -r requirements.txt`
 4. `python bot.py` (or `python -m engine`)
 
@@ -210,6 +234,16 @@ otherwise global sync which can take up to an hour the first time).
 - `/mood` — (admin) peek at the current mood.
 - No `/haunt` or `/watch`, and no `/interact` — he ignores other bots entirely.
   Unasked reactions may reply `SKIP` (send nothing).
+
+**Vida** (`GHOST_ID=vida`):
+
+- `/ask question:<text>` — ask Vida; warm, affectionate answer.
+- `/tend member:<@member>` — she quietly looks in on them for a while.
+- `/remedy` — an old memory or remedy from her healing days.
+- `/mood` — (admin) peek at the current mood.
+- No `/interact` — she keeps to the students and ignores other ghost bots.
+  Passive reactions follow `/tend`; keywords include `vida`, `i don't feel well`,
+  and `can't sleep`.
 
 ## Notes
 
