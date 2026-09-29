@@ -28,6 +28,7 @@ GHOST_TAGS = {
     "cassy": "\u2062",
     "maynard": "\u2063",
     "sebastian": "\u2064",
+    "vida": "\u2065",
 }
 
 # Trailing zero-width space marking genuine /interact traffic.
