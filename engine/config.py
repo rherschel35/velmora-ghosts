@@ -182,6 +182,28 @@ class GhostConfig:
             self.prompt_names.get("other_ghost", _DEFAULT_PEER_NAMES["other_ghost"]),
         )
 
+    def other_ghost_1_name(self) -> str:
+        """First /interact peer (Cassy: Mordy; Mordy/Finley: slot 1)."""
+        default = (
+            self.interact_partners[0].name
+            if self.interact_partners
+            else _DEFAULT_PEER_NAMES["mordy"]
+        )
+        return (
+            os.getenv("OTHER_GHOST_1_NAME")
+            or os.getenv("OTHER_GHOST_NAME")
+            or default
+        )
+
+    def other_ghost_2_name(self) -> str:
+        """Second /interact peer (Cassy: Finley)."""
+        default = (
+            self.interact_partners[1].name
+            if len(self.interact_partners) > 1
+            else _DEFAULT_PEER_NAMES["finley"]
+        )
+        return os.getenv("OTHER_GHOST_2_NAME") or default
+
     def sebastian_name(self) -> str:
         return self._named("sebastian")
 
@@ -209,6 +231,8 @@ class GhostConfig:
         return {
             "ghost_name": self.resolved_name(),
             "other_ghost_name": self.other_ghost_name(),
+            "other_ghost_1_name": self.other_ghost_1_name(),
+            "other_ghost_2_name": self.other_ghost_2_name(),
             "sebastian_name": self.sebastian_name(),
             "maynard_name": self.maynard_name(),
             "mordy_name": self.mordy_name(),

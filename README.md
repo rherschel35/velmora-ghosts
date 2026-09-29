@@ -10,6 +10,7 @@ GHOST_ID=finley python bot.py
 GHOST_ID=maynard python bot.py
 GHOST_ID=sebastian python bot.py
 GHOST_ID=vida python bot.py
+GHOST_ID=cassy python bot.py
 ```
 
 Characters ported so far:
@@ -28,6 +29,10 @@ Characters ported so far:
   `/ask`, `/tend` (gentle check-ins), `/remedy`, warm House Vashara voice.
   No `/interact` — she ignores other ghost bots. Keyword phrases include
   `vida`, `i don't feel well`, and `can't sleep` (all always-on).
+- **Cassy** from [Cassie-Caldrin](https://github.com/rherschel35/Cassie-Caldrin) —
+  `/ask`, `/watch` (curious Caldrin check-ins), `/invention`, teen inventor voice.
+  **`/interact`** with **Mordy or Finley only** (two peer bots). Keywords:
+  `cassy` / `cassie`, `experiment`, `explosion`.
 
 With the matching `GHOST_ID`, each ghost's system prompt, moods, keywords,
 lore fragments, history pairings, and slash-command names match its original
@@ -48,6 +53,7 @@ characters/
   maynard.yaml         # Maynard: /ask /watch /experiment
   sebastian.yaml       # Sebastian: /ask /pun /mazejournal
   vida.yaml            # Vida: /ask /tend /remedy
+  cassy.yaml           # Cassy: /ask /watch /invention /interact
 data/lore/             # shared across every ghost
   velmora_lore.json    # canonical biographies
   shared_history.json  # cross-ghost story bank
@@ -64,7 +70,7 @@ Discord bot process per ghost:
 | --- | --- | --- |
 | Mordy | `mordy` | `characters/mordy.yaml` |
 | Finley | `finley` | `characters/finley.yaml` |
-| Cassy | `cassy` | *(add `characters/cassy.yaml`)* |
+| Cassy | `cassy` | `characters/cassy.yaml` |
 | Sebastian | `sebastian` | `characters/sebastian.yaml` |
 | Maynard | `maynard` | `characters/maynard.yaml` |
 | Vida | `vida` | `characters/vida.yaml` |
@@ -112,6 +118,29 @@ Same image as Mordy; only the service variables change:
 
 `GHOST_ID=finley` loads `characters/finley.yaml`, so this service exposes
 `/watch` (not `/haunt`), Finley's moods/keywords, and House Veyren lore.
+
+### Service 3 — Cassy
+
+Same image; Cassy is the ghost with **two** `/interact` targets (Mordy and Finley only):
+
+| Variable | Example / notes |
+| --- | --- |
+| `GHOST_ID` | `cassy` |
+| `DISCORD_TOKEN` | Cassy's Discord bot token (her own Discord app) |
+| `ANTHROPIC_API_KEY` | shared project variable is fine |
+| `OTHER_GHOST_1_ID` | Mordy's Discord **user** id (bot account) |
+| `OTHER_GHOST_1_NAME` | `Mordy Velmora` (optional; YAML default) |
+| `OTHER_GHOST_2_ID` | Finley's Discord user id |
+| `OTHER_GHOST_2_NAME` | `Finley Veyren` (optional) |
+| `STATE_DIR` | **separate** volume (e.g. mount as `/data` or your existing `cassy-memory` path) |
+| `HAUNT_CHANNEL_IDS` | optional channel allowlist |
+| `ALLOWED_GUILD_IDS` | optional guild allowlist |
+
+`GHOST_ID=cassy` loads `characters/cassy.yaml` and registers **`/ask`**,
+**`/watch`**, **`/invention`**, **`/mood`**, and **`/interact`** (choices:
+Mordy Velmora or Finley Veyren). Cross-ghost exchanges use the shared
+`GHOST_TAGS` address tags so only the ghost being called answers in a
+three-bot channel.
 
 ### Service 5 — Maynard
 
@@ -178,7 +207,7 @@ Typical Railway setup:
    at the same repo / same image).
 4. On each service, set `GHOST_ID` and that ghost's `DISCORD_TOKEN` (and
    `ANTHROPIC_API_KEY`, usually as a shared variable). Copy the tables above
-   for Mordy, Finley, Maynard, Sebastian, and Vida; add Cassy when her YAML lands.
+   for all six ghosts (Mordy, Finley, Cassy, Sebastian, Maynard, Vida).
 5. Attach a **separate** volume to each service and set `STATE_DIR` to the
    mount path.
 
@@ -193,7 +222,7 @@ new YAML under `characters/` plus another Railway service with a new
    - Invite it with the `bot` and `applications.commands` scopes, and at least:
      View Channels, Send Messages, Read Message History.
 2. `cp .env.example .env` and fill in `DISCORD_TOKEN`, `ANTHROPIC_API_KEY`,
-   and `GHOST_ID` (`mordy`, `finley`, `maynard`, `sebastian`, or `vida`).
+   and `GHOST_ID` (`mordy`, `finley`, `cassy`, `maynard`, `sebastian`, or `vida`).
 3. `pip install -r requirements.txt`
 4. `python bot.py` (or `python -m engine`)
 
@@ -217,6 +246,14 @@ otherwise global sync which can take up to an hour the first time).
 - `/lore` — next piece of House Veyren's history.
 - `/mood` — (admin) peek at the current mood.
 - `/interact who:<ghost>` — brief public exchange with Mordy or Cassy.
+
+**Cassy** (`GHOST_ID=cassy`):
+
+- `/ask question:<text>` — ask Cassy; warm, sharp, teenage-inventor answer.
+- `/watch user:<@member>` — she keeps a curious eye on them for a while.
+- `/invention` — one of her old patents or inventions.
+- `/mood` — (admin) peek at the current mood.
+- `/interact who:<ghost>` — brief public exchange with **Mordy Velmora** or **Finley Veyren** only.
 
 **Maynard** (`GHOST_ID=maynard`):
 
