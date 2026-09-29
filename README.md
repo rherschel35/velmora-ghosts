@@ -7,18 +7,23 @@ Boot any ghost with `GHOST_ID`:
 ```bash
 GHOST_ID=mordy python bot.py
 GHOST_ID=finley python bot.py
+GHOST_ID=maynard python bot.py
 ```
 
 Characters ported so far:
 
 - **Mordy** from [mordyvelmora-ghost](https://github.com/rherschel35/mordyvelmora-ghost) —
-  `/haunt`, restless voice.
+  `/seance`, `/haunt`, `/lore`, restless voice.
 - **Finley** from [FinleyVeyren-ghost](https://github.com/rherschel35/FinleyVeyren-ghost) —
-  `/watch` (House Veyren attention), warmer voice.
+  `/seance`, `/watch` (protective), `/lore`, warmer voice.
+- **Maynard** from [Maynard-moonveil](https://github.com/rherschel35/Maynard-moonveil) —
+  `/ask`, `/watch` (mischief), `/experiment`, chaotic House Moonveil voice.
+  No `/interact` — he does not talk to the other ghosts.
 
 With the matching `GHOST_ID`, each ghost's system prompt, moods, keywords,
-lore fragments, history pairings, attention command, and `/interact` partners
-match its original bot.
+lore fragments, history pairings, and slash-command names match its original
+bot. Keyword triggers may carry optional `chance` weights (Maynard's
+`what if` / `prank` fire ~25%; his name is always-on).
 
 ## Layout
 
@@ -29,8 +34,9 @@ engine/                # shared Discord + Claude engine
   config.py            # GHOST_ID → characters/<id>.yaml
   cogs/                # personality, haunting, commands, diary
 characters/
-  mordy.yaml           # Mordy-specific voice + /haunt
-  finley.yaml          # Finley-specific voice + /watch
+  mordy.yaml           # Mordy: /seance /haunt /lore
+  finley.yaml          # Finley: /seance /watch /lore
+  maynard.yaml         # Maynard: /ask /watch /experiment
 data/lore/             # shared across every ghost
   velmora_lore.json    # canonical biographies
   shared_history.json  # cross-ghost story bank
@@ -49,7 +55,7 @@ Discord bot process per ghost:
 | Finley | `finley` | `characters/finley.yaml` |
 | Cassy | `cassy` | *(add `characters/cassy.yaml`)* |
 | Sebastian | `sebastian` | *(add `characters/sebastian.yaml`)* |
-| Maynard | `maynard` | *(add `characters/maynard.yaml`)* |
+| Maynard | `maynard` | `characters/maynard.yaml` |
 | Vida | `vida` | *(add `characters/vida.yaml`)* |
 
 Each service gets its own variables and (recommended) its own volume:
@@ -96,6 +102,25 @@ Same image as Mordy; only the service variables change:
 `GHOST_ID=finley` loads `characters/finley.yaml`, so this service exposes
 `/watch` (not `/haunt`), Finley's moods/keywords, and House Veyren lore.
 
+### Service 5 — Maynard
+
+Same image again; Maynard does **not** use `OTHER_GHOST_*` (no `/interact`):
+
+| Variable | Example / notes |
+| --- | --- |
+| `GHOST_ID` | `maynard` |
+| `DISCORD_TOKEN` | Maynard's Discord bot token (his own Discord app) |
+| `ANTHROPIC_API_KEY` | shared project variable is fine |
+| `STATE_DIR` | **separate** volume from the other ghosts, e.g. `/data` |
+| `HAUNT_CHANNEL_IDS` | optional channel allowlist |
+| `ALLOWED_GUILD_IDS` | optional guild allowlist |
+| `HEADMASTER_ROLE_ID` | optional; YAML defaults to the Velmora Headmasters role |
+
+`GHOST_ID=maynard` loads `characters/maynard.yaml` and registers
+`/ask`, `/watch`, `/experiment`, `/mood` (no `/interact`). His `/watch` is
+mischief-interest, not Finley's protective watch. Keyword cues: `maynard`
+(always), `what if` / `prank` (~25% chance each).
+
 Typical Railway setup:
 
 1. Create one Railway project for Velmora.
@@ -104,7 +129,7 @@ Typical Railway setup:
    at the same repo / same image).
 4. On each service, set `GHOST_ID` and that ghost's `DISCORD_TOKEN` (and
    `ANTHROPIC_API_KEY`, usually as a shared variable). Copy the tables above
-   for Mordy and Finley; add the remaining four as their YAMLs land.
+   for Mordy, Finley, and Maynard; add the remaining three as their YAMLs land.
 5. Attach a **separate** volume to each service and set `STATE_DIR` to the
    mount path.
 
@@ -119,7 +144,7 @@ new YAML under `characters/` plus another Railway service with a new
    - Invite it with the `bot` and `applications.commands` scopes, and at least:
      View Channels, Send Messages, Read Message History.
 2. `cp .env.example .env` and fill in `DISCORD_TOKEN`, `ANTHROPIC_API_KEY`,
-   and `GHOST_ID` (`mordy` or `finley`).
+   and `GHOST_ID` (`mordy`, `finley`, or `maynard`).
 3. `pip install -r requirements.txt`
 4. `python bot.py` (or `python -m engine`)
 
@@ -143,6 +168,14 @@ otherwise global sync which can take up to an hour the first time).
 - `/lore` — next piece of House Veyren's history.
 - `/mood` — (admin) peek at the current mood.
 - `/interact who:<ghost>` — brief public exchange with Mordy or Cassy.
+
+**Maynard** (`GHOST_ID=maynard`):
+
+- `/ask question:<text>` — ask Maynard; gleeful, curious answer.
+- `/watch member:<@member>` — picks them as his next harmless-mischief target.
+- `/experiment` — an entry from his old journals of (alleged) experiments.
+- `/mood` — (admin) peek at the current mood.
+- No `/interact` — he keeps to the students and ignores other ghost bots.
 
 ## Notes
 

@@ -450,10 +450,7 @@ class Personality(DiaryMixin, commands.Cog):
         memory_block += self.diary_block(user_prompt)
 
         system = self.ghost.system_prompt.format(
-            ghost_name=self.ghost.resolved_name(),
-            other_ghost_name=self.ghost.other_ghost_name(),
-            sebastian_name=self.ghost.sebastian_name(),
-            maynard_name=self.ghost.maynard_name(),
+            **self.ghost.prompt_format_kwargs(),
             mood=self.current_mood(),
             lore_block=self.lore_block,
             memory_block=memory_block,

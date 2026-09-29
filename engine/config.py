@@ -26,10 +26,21 @@ GHOST_TAGS = {
     "mordy": "\u2060",
     "finley": "\u2061",
     "cassy": "\u2062",
+    "maynard": "\u2063",
 }
 
 # Trailing zero-width space marking genuine /interact traffic.
 INTERACT_MARKER = "\u200b"
+
+# Defaults for named peers that may appear in system prompts.
+_DEFAULT_PEER_NAMES = {
+    "other_ghost": "the other ghost",
+    "mordy": "Mordy Velmora",
+    "finley": "Finley Veyren",
+    "cassy": "Cassy Caldrin",
+    "sebastian": "Sebastian Thornmere",
+    "maynard": "Maynard Moonveil",
+}
 
 
 @dataclass
@@ -46,6 +57,12 @@ class InteractPartner:
 
 
 @dataclass
+class KeywordTrigger:
+    cue: str
+    chance: float = 1.0
+
+
+@dataclass
 class GhostConfig:
     id: str
     name: str
@@ -55,13 +72,16 @@ class GhostConfig:
     moods: list[str]
     relevant_history_pairs: set[str]
     fallback_lines: list[str]
-    keyword_triggers: dict[str, str]
+    keyword_triggers: dict[str, KeywordTrigger]
     system_prompt: str
     lore_fragments: list[str]
     prompt_names: dict[str, str] = field(default_factory=dict)
     interact_partners: list[InteractPartner] = field(default_factory=list)
-    # Slash-command copy + attention command name (/haunt vs /watch).
+    # Slash-command copy + renames (/haunt|/watch, /seance|/ask, /lore|/experiment).
     commands: dict[str, Any] = field(default_factory=dict)
+    # Optional passive-haunting knobs (Maynard: cooldown, lower chances, etc.).
+    haunting: dict[str, Any] = field(default_factory=dict)
+    headmaster_role_id: int | None = None
 
     # Resolved paths / dirs
     lore_dir: Path = LORE_DIR
@@ -83,9 +103,24 @@ class GhostConfig:
             return default
         raise KeyError(f"characters/{self.id}.yaml commands.{section}.{key} is required")
 
+    def command_name(self, section: str, default: str) -> str:
+        """Slash command name for a logical section (seance/attention/lore)."""
+        return self.cmd(section, "command", default)
+
     def attention_command(self) -> str:
         """Slash command name for the attention mechanic: haunt or watch."""
-        return self.cmd("attention", "command", "haunt")
+        return self.command_name("attention", "haunt")
+
+    def seance_command(self) -> str:
+        return self.command_name("seance", "seance")
+
+    def lore_command(self) -> str:
+        return self.command_name("lore", "lore")
+
+    def haunt(self, key: str, default: Any = None) -> Any:
+        if key in self.haunting:
+            return self.haunting[key]
+        return default
 
     @property
     def history_path(self) -> Path:
@@ -99,20 +134,67 @@ class GhostConfig:
     def store_path(self) -> Path:
         return self.state_dir / "memory_store.json"
 
+    def _named(self, key: str) -> str:
+        env = os.getenv(f"{key.upper()}_NAME")
+        if env:
+            return env
+        return self.prompt_names.get(key, _DEFAULT_PEER_NAMES.get(key, key))
+
     def other_ghost_name(self) -> str:
-        return os.getenv("OTHER_GHOST_NAME", self.prompt_names.get("other_ghost", "the other ghost"))
+        return os.getenv(
+            "OTHER_GHOST_NAME",
+            self.prompt_names.get("other_ghost", _DEFAULT_PEER_NAMES["other_ghost"]),
+        )
 
     def sebastian_name(self) -> str:
-        return os.getenv("SEBASTIAN_NAME", self.prompt_names.get("sebastian", "Sebastian Thornmere"))
+        return self._named("sebastian")
 
     def maynard_name(self) -> str:
-        return os.getenv("MAYNARD_NAME", self.prompt_names.get("maynard", "Maynard Moonveil"))
+        return self._named("maynard")
+
+    def mordy_name(self) -> str:
+        return self._named("mordy")
+
+    def finley_name(self) -> str:
+        return self._named("finley")
+
+    def cassy_name(self) -> str:
+        return self._named("cassy")
 
     def resolved_name(self) -> str:
         return os.getenv("GHOST_NAME", self.name)
 
+    def prompt_format_kwargs(self) -> dict[str, str]:
+        """Name placeholders for system_prompt.format(...).
+
+        Mordy/Finley use {other_ghost_name}/{sebastian_name}/{maynard_name};
+        Maynard uses {mordy_name}/{finley_name}/{sebastian_name}/{cassy_name}.
+        """
+        return {
+            "ghost_name": self.resolved_name(),
+            "other_ghost_name": self.other_ghost_name(),
+            "sebastian_name": self.sebastian_name(),
+            "maynard_name": self.maynard_name(),
+            "mordy_name": self.mordy_name(),
+            "finley_name": self.finley_name(),
+            "cassy_name": self.cassy_name(),
+        }
+
     def presence_activity(self) -> str:
         return self.presence.format(ghost_name=self.resolved_name())
+
+    def is_headmaster(self, member) -> bool:
+        role_id = self.headmaster_role_id
+        if not role_id:
+            return False
+        for role in getattr(member, "roles", None) or []:
+            if role.id == role_id or (role.name or "").strip().lower() == "headmasters":
+                return True
+        return False
+
+    def speaker_label(self, member) -> str:
+        name = str(member.display_name)
+        return f"{name} (a headmaster)" if self.is_headmaster(member) else name
 
     def partner_by_id(self, partner_id: str) -> InteractPartner | None:
         for partner in self.interact_partners:
@@ -162,6 +244,20 @@ def _require(data: dict[str, Any], key: str) -> Any:
     return data[key]
 
 
+def _normalize_keyword_triggers(raw: dict[str, Any]) -> dict[str, KeywordTrigger]:
+    """Accept plain cue strings (Mordy/Finley) or {chance, cue} maps (Maynard)."""
+    out: dict[str, KeywordTrigger] = {}
+    for keyword, value in (raw or {}).items():
+        if isinstance(value, dict):
+            cue = str(value.get("cue") or "")
+            chance = float(value.get("chance", 1.0))
+        else:
+            cue = str(value)
+            chance = 1.0
+        out[str(keyword)] = KeywordTrigger(cue=cue, chance=chance)
+    return out
+
+
 def load_character(ghost_id: str | None = None) -> GhostConfig:
     ghost_id = (ghost_id or os.getenv("GHOST_ID") or "").strip().lower()
     if not ghost_id:
@@ -188,6 +284,9 @@ def load_character(ghost_id: str | None = None) -> GhostConfig:
     ]
 
     state_dir = Path(os.getenv("STATE_DIR", str(ROOT / "data")))
+    headmaster_role_id = raw.get("headmaster_role_id")
+    if headmaster_role_id is not None:
+        headmaster_role_id = int(headmaster_role_id)
 
     cfg = GhostConfig(
         id=ghost_id,
@@ -198,12 +297,14 @@ def load_character(ghost_id: str | None = None) -> GhostConfig:
         moods=list(_require(raw, "moods")),
         relevant_history_pairs=set(raw.get("relevant_history_pairs") or []),
         fallback_lines=list(_require(raw, "fallback_lines")),
-        keyword_triggers=dict(_require(raw, "keyword_triggers")),
+        keyword_triggers=_normalize_keyword_triggers(_require(raw, "keyword_triggers")),
         system_prompt=str(_require(raw, "system_prompt")),
         lore_fragments=list(raw.get("lore_fragments") or []),
         prompt_names=dict(raw.get("prompt_names") or {}),
         interact_partners=partners,
         commands=dict(raw.get("commands") or {}),
+        haunting=dict(raw.get("haunting") or {}),
+        headmaster_role_id=headmaster_role_id,
         state_dir=state_dir,
     )
     return cfg

@@ -61,13 +61,31 @@ class Haunting(commands.Cog):
             kw: re.compile(r"\b" + re.escape(kw.replace("'", "")) + r"\b")
             for kw in self.ghost.keyword_triggers
         }
+        # After an unasked line, stay quiet in that channel this long (Maynard).
+        self._chime_cooldown = int(
+            self.ghost.haunt("chime_cooldown_seconds", 0) or 0
+        )
+        self._last_chime: dict[int, float] = {}
 
-    def match_keyword(self, content: str):
+    def _chime_ready(self, channel_id: int) -> bool:
+        if self._chime_cooldown <= 0:
+            return True
+        return time.time() - self._last_chime.get(channel_id, 0) >= self._chime_cooldown
+
+    def match_keyword(self, content: str, rng=random):
+        """Return (keyword, cue_or_None).
+
+        cue is None when a keyword matched but its chance roll failed (Maynard's
+        what-if/prank are ~25%). Callers must not fall through to ambient asides
+        in that case. Plain string triggers (Mordy/Finley) always have chance 1.0.
+        """
         lowered = (content or "").lower().replace("'", "").replace("\u2019", "")
-        for keyword, cue in self.ghost.keyword_triggers.items():
+        for keyword, trigger in self.ghost.keyword_triggers.items():
             if self._keyword_patterns[keyword].search(lowered):
-                return cue
-        return None
+                if trigger.chance >= 1.0 or rng.random() < trigger.chance:
+                    return keyword, trigger.cue
+                return keyword, None
+        return None, None
 
     async def _maybe_reply_to_other_ghost(self, message: discord.Message):
         """Handle a message from another ghost bot during an /interact
@@ -190,7 +208,7 @@ class Haunting(commands.Cog):
             else:
                 history.append({
                     "role": "user",
-                    "content": f"{msg.author.display_name}: {text}",
+                    "content": f"{self.ghost.speaker_label(msg.author)}: {text}",
                 })
 
         if replying_to_me:
@@ -206,9 +224,10 @@ class Haunting(commands.Cog):
                 "Someone has just spoken to you directly, by name. Answer them in character, briefly."
             )
 
+        speaker = self.ghost.speaker_label(message.author)
         async with message.channel.typing():
             line = await personality.speak(
-                f"{author_name}: {asked}",
+                f"{speaker}: {asked}",
                 max_tokens=200,
                 history=history,
                 direction=direction,
@@ -239,12 +258,13 @@ class Haunting(commands.Cog):
         personality.maybe_shift_mood()
 
         content = message.content or ""
-        author_name = str(message.author.display_name)
+        plain_name = str(message.author.display_name)
+        author_name = self.ghost.speaker_label(message.author)
 
         # Remember most messages with enough substance, so the ghost has
         # material to resurface later. Skip very short/low-content ones.
         if len(content.strip()) >= 12:
-            if personality.remember(author_name, content, message.channel.id):
+            if personality.remember(plain_name, content, message.channel.id):
                 # Enough new talk has piled up - condense it into the ghost's
                 # running notes in the background.
                 asyncio.create_task(self._write_notes_safely(personality))
@@ -255,18 +275,31 @@ class Haunting(commands.Cog):
             return
 
         haunted = personality.is_haunted(message.author.id)
+        keyword, matched_cue = self.match_keyword(content)
+        name_keyword = (self.ghost.haunt("name_keyword") or "").lower()
+        attention_chance = float(self.ghost.haunt("attention_chance", 0.35))
+        random_chance = float(self.ghost.haunt("random_chance", 0.01))
 
-        matched_cue = self.match_keyword(content)
-
-        should_respond = False
         cue = None
+        unasked = True
 
-        if matched_cue:
-            should_respond = True
-            cue = f'{matched_cue} They said: "{content}"'
-        elif haunted and random.random() < 0.35:
-            should_respond = True
-            # Character YAML supplies Mordy's /haunt cue or Finley's /watch cue.
+        if keyword and matched_cue and name_keyword and keyword == name_keyword:
+            # Called by name (Maynard): always answer, cooldown or not.
+            unasked = False
+            cue = f'{matched_cue} {author_name} said: "{content}"'
+        elif self._chime_cooldown > 0 and not self._chime_ready(message.channel.id):
+            return
+        elif matched_cue:
+            # Mordy/Finley keep the original "They said" cue wording; Maynard
+            # (with a name_keyword configured) uses the speaker label.
+            if name_keyword:
+                cue = f'{matched_cue} {author_name} said: "{content}"'
+            else:
+                cue = f'{matched_cue} They said: "{content}"'
+        elif keyword:
+            # Keyword heard but chance failed — stay quiet; don't ambient-aside.
+            return
+        elif haunted and random.random() < attention_chance:
             cue = self.ghost.cmd(
                 "attention",
                 "passive_cue",
@@ -276,18 +309,25 @@ class Haunting(commands.Cog):
                     "referencing what they said, as if you'd been waiting for them to speak."
                 ),
             ).format(user=author_name, content=content)
-        elif random.random() < 0.01:
-            # rare ambient reaction to an ordinary message
-            should_respond = True
-            cue = f'Someone said: "{content}". React to it in passing, briefly, as an aside.'
+        elif random.random() < random_chance:
+            random_cue = self.ghost.commands.get("attention", {}).get("random_cue")
+            if random_cue:
+                cue = str(random_cue).format(content=content, user=author_name)
+            else:
+                cue = (
+                    f'Someone said: "{content}". React to it in passing, briefly, as an aside.'
+                )
 
-        if not should_respond:
+        if not cue:
             return
+
+        if unasked and self._chime_cooldown > 0:
+            self._last_chime[message.channel.id] = time.time()
 
         async with message.channel.typing():
             memory_hint = None
             if random.random() < 0.3:
-                memory_hint = personality.random_memory(exclude_author=author_name)
+                memory_hint = personality.random_memory(exclude_author=plain_name)
             line = await personality.speak(cue, memory_hint=memory_hint)
 
         try:
