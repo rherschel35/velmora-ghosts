@@ -31,33 +31,11 @@ prompt_names:
   finley: Finley Veyren
   sebastian: Sebastian Thornmere
   maynard: Maynard Moonveil
-interact_partners:
-- id: mordy
-  name: Mordy Velmora
-- id: finley
-  name: Finley Veyren
+interact_partners: []
 haunting:
   attention_chance: 0.35
   random_chance: 0.01
 commands:
-  seance:
-    command: ask
-    description: Ask the Caldrin ghost of Velmora a question.
-    unavailable: No one's answering right now.
-    question_describe: What do you want to ask her?
-    ask_cue: '{asker} asks you directly: "{question}". Answer as yourself - warm, genuinely engaged with whatever they actually asked, and glad they came to you with it.'
-    embed_color: dark_teal
-    author: '{asker} asks into the quiet...'
-  attention:
-    command: watch
-    description: Ask Cassy to keep an eye on a specific member for a while.
-    user_describe: Who should she look out for?
-    unavailable: No response right now.
-    no_bots: She has no interest in watching the hollow ones.
-    cue: You've just been asked to keep an eye on {user} specifically, for a while. Announce it in character - warm and glad to do it, like someone volunteering to look out for a friend, not ominous.
-    embed_color: dark_gold
-    footer: '{user} is being watched.'
-    passive_cue: 'You''re currently keeping an eye on {user} specifically, the way you would with someone whose work you actually respect. They just said: "{content}". Say something that shows you noticed - curious and present, not intrusive.'
   lore:
     command: invention
     description: Ask Cassy to share one of her old inventions or patents.
@@ -67,10 +45,6 @@ commands:
     title: From the patent files...
     embed_color: teal
     footer: '{remaining} invention(s) left unmentioned.'
-  mood:
-    denied: You need permission for this one.
-  interact:
-    description: Call out to another ghost for a brief exchange.
 lore_fragments:
 - The charm that untangles headphone cords and shoelaces on contact - that one took me eleven tries and one very burnt sleeve.
 - I made a salve that pulls a splinter out painlessly on its own. Nobody asked for it. Everybody needed it. That was kind of the whole philosophy.

@@ -355,7 +355,7 @@ class Haunting(commands.Cog):
         cue = None
         unasked = True
         allow_silence = False
-        tokens = 180
+        tokens = int(self.ghost.haunt("reply_max_tokens", 180) or 180)
 
         if keyword and matched_cue and name_keyword and keyword in (
             name_keyword, "tournament", "house"
@@ -372,6 +372,9 @@ class Haunting(commands.Cog):
                 tokens = int(name_tokens.get(keyword, 120))
             else:
                 cue = f'{matched_cue} {author_name} said: "{content}"'
+                name_tokens = self.ghost.haunt("name_tokens") or {}
+                if name_keyword in name_tokens:
+                    tokens = int(name_tokens[name_keyword])
         elif self._chime_cooldown > 0 and not self._chime_ready(message.channel.id):
             return
         elif matched_cue:
@@ -448,7 +451,9 @@ class Haunting(commands.Cog):
                 )
             else:
                 async with message.channel.typing():
-                    line = await personality.speak(cue, memory_hint=memory_hint)
+                    line = await personality.speak(
+                        cue, memory_hint=memory_hint, max_tokens=tokens
+                    )
 
         if is_silence(line):
             return

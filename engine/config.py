@@ -111,27 +111,61 @@ class GhostConfig:
         """Slash command name for a logical section (seance/attention/lore)."""
         return self.cmd(section, "command", default)
 
-    def has_attention_command(self) -> bool:
-        """False for characters like Sebastian who have no /haunt or /watch."""
-        attn = self.commands.get("attention")
-        if not attn:
+    def _section_enabled(self, section: str) -> bool:
+        block = self.commands.get(section)
+        if not block:
             return False
-        if attn.get("enabled") is False:
+        if block.get("enabled") is False:
             return False
         return True
 
+    def has_attention_command(self) -> bool:
+        """False when attention.enabled is false or the section is omitted."""
+        return self._section_enabled("attention")
+
+    def has_stop_attention_command(self) -> bool:
+        """True when attention.stop_command is set (e.g. /stophaunt, /stopflirt)."""
+        if not self.has_attention_command():
+            return False
+        return bool((self.commands.get("attention") or {}).get("stop_command"))
+
+    def has_seance_command(self) -> bool:
+        return self._section_enabled("seance")
+
+    def has_lore_command(self) -> bool:
+        return self._section_enabled("lore")
+
+    def has_mood_command(self) -> bool:
+        return self._section_enabled("mood")
+
     def has_pun_command(self) -> bool:
-        return bool(self.commands.get("pun"))
+        return self._section_enabled("pun")
+
+    def has_interact_command(self) -> bool:
+        if not self.interact_partners:
+            return False
+        interact = self.commands.get("interact")
+        if interact is not None and interact.get("enabled") is False:
+            return False
+        return True
 
     def attention_command(self) -> str:
-        """Slash command name for the attention mechanic: haunt or watch."""
+        """Slash command name for the attention mechanic: haunt, watch, tend, flirt."""
         return self.command_name("attention", "haunt")
+
+    def stop_attention_command(self) -> str:
+        return str(
+            (self.commands.get("attention") or {}).get("stop_command") or "stophaunt"
+        )
 
     def seance_command(self) -> str:
         return self.command_name("seance", "seance")
 
     def lore_command(self) -> str:
         return self.command_name("lore", "lore")
+
+    def attention_headmasters_only(self) -> bool:
+        return bool((self.commands.get("attention") or {}).get("headmasters_only"))
 
     def house_role_id(self) -> int:
         env = os.getenv("HOUSE_ROLE_ID")
@@ -244,11 +278,12 @@ class GhostConfig:
         return self.presence.format(ghost_name=self.resolved_name())
 
     def is_headmaster(self, member) -> bool:
-        role_id = self.headmaster_role_id
-        if not role_id:
-            return False
+        env = os.getenv("HEADMASTER_ROLE_ID")
+        role_id = int(env) if env and env.isdigit() else self.headmaster_role_id
         for role in getattr(member, "roles", None) or []:
-            if role.id == role_id or (role.name or "").strip().lower() == "headmasters":
+            if role_id and role.id == role_id:
+                return True
+            if (role.name or "").strip().lower() == "headmasters":
                 return True
         return False
 

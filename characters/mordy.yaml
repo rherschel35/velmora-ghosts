@@ -28,44 +28,30 @@ prompt_names:
   other_ghost: the other ghost
   sebastian: Sebastian Thornmere
   maynard: Maynard Moonveil
-interact_partners:
-- id: finley
-  name: Finley Veyren
-- id: cassy
-  name: Cassy Caldrin
+interact_partners: []
+headmaster_role_id: 1542569502653550705
 commands:
-  seance:
-    description: Ask the ghost of Velmora a question.
-    unavailable: The circle will not form tonight.
-    answer_style: cryptic, but responsive to what was actually asked.
-    embed_color: dark_purple
-    author: '{asker} calls out into the dark...'
-    command: seance
   attention:
     command: haunt
-    description: Set the ghost loose on a specific member for a while.
+    stop_command: stophaunt
+    headmasters_only: true
+    headmasters_only_denied: Only the Headmasters can set Mordy loose.
+    description: (Headmasters) Set Mordy loose on a specific member for a while.
+    stop_description: (Headmasters) Call Mordy off a member.
     user_describe: Who should the ghost fixate on?
+    stop_user_describe: Who should Mordy leave alone?
     unavailable: It does not answer to that name.
     no_bots: It has no interest in the hollow ones.
+    stop_not_active: It wasn't haunting {user}.
     cue: |-
       You have just been set loose to haunt {user} specifically, for a while. Announce, in character, that you've noticed them - a warning or a promise, not an explanation.
+    stop_cue: |-
+      You've just been told to leave {user} alone. Acknowledge it briefly, in character - dry, a little put out, and done.
     embed_color: dark_red
     footer: The ghost's attention now turns to {user}.
+    stop_footer: Mordy is no longer haunting {user}.
     passive_cue: |-
       You are currently fixated on haunting {user} specifically. They just said: "{content}". Slip into their conversation uninvited, referencing what they said, as if you'd been waiting for them to speak.
-  lore:
-    description: Ask the ghost to reveal a fragment of Velmora's past.
-    unavailable: The past stays buried tonight.
-    exhausted_cue: |-
-      Someone has asked you to reveal more of your past, but you have already told them everything you're willing to. Deflect, in character - refuse without explaining that you've run out of material.
-    share_cue: |-
-      Reveal this fragment of your past to whoever is listening, in your own voice, not verbatim but true to it: "{fragment}"
-    title: A fragment surfaces...
-    embed_color: dark_teal
-    footer: '{remaining} fragment(s) of Velmora''s past remain untold.'
-    command: lore
-  mood:
-    denied: You lack the standing to demand that of it.
 lore_fragments:
 - Velmora was not always empty at midnight. There was a bell tower once, and someone who rang it wrong
   on purpose, every night, as a joke only they found funny.
