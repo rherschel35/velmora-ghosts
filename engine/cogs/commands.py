@@ -2,9 +2,10 @@
 Slash commands for interacting with the ghost directly.
 
 Command names and copy come from characters/<GHOST_ID>.yaml:
-- /seance
-- attention command: /haunt (Mordy) or /watch (Finley)
-- /lore, /mood
+- ask command: /seance (Mordy/Finley) or /ask (Maynard)
+- attention: /haunt (Mordy) or /watch (Finley/Maynard)
+- lore command: /lore (Mordy/Finley) or /experiment (Maynard)
+- /mood
 - /interact (when interact_partners are configured)
 """
 
@@ -27,7 +28,19 @@ ATTENTION_DURATION_SECONDS = 60 * 60 * 6  # 6 hours
 
 
 def _embed_color(name: str) -> discord.Color:
-    getter = getattr(discord.Color, name, None)
+    """Accept discord.Color method names or hex strings like 0x8B5FBF / #8B5FBF."""
+    raw = (name or "").strip()
+    if raw.lower().startswith("0x"):
+        try:
+            return discord.Color(int(raw, 16))
+        except ValueError:
+            return discord.Color.dark_grey()
+    if raw.startswith("#") and len(raw) in (4, 7):
+        try:
+            return discord.Color(int(raw[1:], 16))
+        except ValueError:
+            return discord.Color.dark_grey()
+    getter = getattr(discord.Color, raw, None)
     if callable(getter):
         return getter()
     return discord.Color.dark_grey()
@@ -63,9 +76,13 @@ class GhostCommands(commands.Cog):
             return os.getenv("OTHER_GHOST_2_NAME") or partner.name
         return partner.name
 
+    def _asker_label(self, interaction: discord.Interaction) -> str:
+        return self.ghost.speaker_label(interaction.user)
+
     @app_commands.command(name="seance", description="Ask the ghost of Velmora a question.")
     @app_commands.describe(question="What do you want to ask it?")
     async def seance(self, interaction: discord.Interaction, question: str):
+        """Ask mechanic — renamed to /seance or /ask in setup()."""
         personality = self._personality()
         if not personality:
             await interaction.response.send_message(
@@ -75,21 +92,26 @@ class GhostCommands(commands.Cog):
 
         await interaction.response.defer(thinking=True)
 
-        asker = str(interaction.user.display_name)
+        asker = self._asker_label(interaction)
+        plain = str(interaction.user.display_name)
         memory_hint = None
-        prior = personality.memories_about(asker, limit=1)
+        prior = personality.memories_about(plain, limit=1)
         if prior:
             memory_hint = prior[0]
 
-        answer_style = self.ghost.cmd(
-            "seance",
-            "answer_style",
-            "cryptic, but responsive to what was actually asked.",
-        )
-        cue = (
-            f'{asker} has called a seance and asks you directly: "{question}". '
-            f"Answer as the ghost - {answer_style}"
-        )
+        ask_cue = self.ghost.commands.get("seance", {}).get("ask_cue")
+        if ask_cue:
+            cue = str(ask_cue).format(asker=asker, question=question)
+        else:
+            answer_style = self.ghost.cmd(
+                "seance",
+                "answer_style",
+                "cryptic, but responsive to what was actually asked.",
+            )
+            cue = (
+                f'{asker} has called a seance and asks you directly: "{question}". '
+                f"Answer as the ghost - {answer_style}"
+            )
         line = await personality.speak(cue, memory_hint=memory_hint, max_tokens=220)
 
         embed = discord.Embed(
@@ -98,7 +120,7 @@ class GhostCommands(commands.Cog):
         )
         author = self.ghost.cmd(
             "seance", "author", "{asker} calls out into the dark..."
-        ).format(asker=asker)
+        ).format(asker=plain)
         embed.set_author(name=author)
         await interaction.followup.send(embed=embed)
 
@@ -139,6 +161,7 @@ class GhostCommands(commands.Cog):
 
     @app_commands.command(name="lore", description="Ask the ghost to reveal a fragment of Velmora's past.")
     async def lore(self, interaction: discord.Interaction):
+        """Lore/journal mechanic — renamed to /lore or /experiment in setup()."""
         personality = self._personality()
         if not personality:
             await interaction.response.send_message(
@@ -159,9 +182,12 @@ class GhostCommands(commands.Cog):
             return
 
         cue = self.ghost.cmd("lore", "share_cue").format(fragment=fragment)
-        line = await personality.speak(cue, max_tokens=200)
+        # Maynard's journal entries run a bit longer than Mordy/Finley lore.
+        max_tokens = 220 if self.ghost.lore_command() == "experiment" else 200
+        line = await personality.speak(cue, max_tokens=max_tokens)
 
         remaining = len(self.lore_fragments) - personality.state.get("lore_index", 0)
+        entry_word = "entry" if remaining == 1 else "entries"
         embed = discord.Embed(
             title=self.ghost.cmd("lore", "title", "A fragment surfaces..."),
             description=line,
@@ -172,7 +198,7 @@ class GhostCommands(commands.Cog):
                 "lore",
                 "footer",
                 "{remaining} fragment(s) of Velmora's past remain untold.",
-            ).format(remaining=remaining)
+            ).format(remaining=remaining, entry_word=entry_word)
         )
         await interaction.followup.send(embed=embed)
 
@@ -251,35 +277,59 @@ class GhostCommands(commands.Cog):
         await interaction.channel.send(line + target_tag + INTERACT_MARKER)
 
 
+def _rename_command(command, name: str, description: str | None = None) -> None:
+    command.name = name
+    if description:
+        command.description = description
+
+
 async def setup(bot: commands.Bot):
     cog = GhostCommands(bot)
     ghost = bot.ghost
 
-    # Wire attention command name + copy from character YAML (/haunt or /watch).
-    attention_name = ghost.attention_command()
-    cog.attention.name = attention_name
-    cog.attention.description = ghost.cmd(
-        "attention",
-        "description",
-        cog.attention.description,
+    # Wire slash command names from character YAML so Mordy/Finley keep
+    # /seance+/haunt+/lore while Maynard gets /ask+/watch+/experiment.
+    _rename_command(
+        cog.seance,
+        ghost.seance_command(),
+        ghost.cmd("seance", "description", cog.seance.description),
+    )
+    if "question" in cog.seance._params:
+        cog.seance._params["question"].description = ghost.cmd(
+            "seance",
+            "question_describe",
+            "What do you want to ask it?",
+        )
+
+    _rename_command(
+        cog.attention,
+        ghost.attention_command(),
+        ghost.cmd("attention", "description", cog.attention.description),
     )
     if "user" in cog.attention._params:
-        cog.attention._params["user"].description = ghost.cmd(
+        user_param = cog.attention._params["user"]
+        user_param.description = ghost.cmd(
             "attention",
             "user_describe",
             "Who should the ghost fixate on?",
         )
+        # Maynard's old bot exposed the option as `member` rather than `user`.
+        rename_to = ghost.commands.get("attention", {}).get("user_param")
+        if rename_to and rename_to != "user":
+            user_param._rename = rename_to
 
-    # Seance / lore descriptions from character YAML.
-    cog.seance.description = ghost.cmd("seance", "description", cog.seance.description)
-    cog.lore.description = ghost.cmd("lore", "description", cog.lore.description)
+    _rename_command(
+        cog.lore,
+        ghost.lore_command(),
+        ghost.cmd("lore", "description", cog.lore.description),
+    )
 
     partners = ghost.interact_partners
     if partners:
         choices = [app_commands.Choice(name=p.name, value=p.id) for p in partners]
         cog.interact_command._params["who"].choices = choices
     else:
-        # Characters without peer ghosts don't expose /interact.
+        # Characters without peer ghosts don't expose /interact (e.g. Maynard).
         cog.__cog_app_commands__ = [
             cmd for cmd in cog.__cog_app_commands__ if cmd.name != "interact"
         ]

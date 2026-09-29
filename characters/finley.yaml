@@ -38,6 +38,7 @@ commands:
     answer_style: warm and direct, but responsive to what was actually asked.
     embed_color: gold
     author: '{asker} calls out into the quiet...'
+    command: seance
   attention:
     command: watch
     description: Ask the ghost to quietly watch over a specific member for a while.
@@ -60,6 +61,7 @@ commands:
     title: A memory surfaces...
     embed_color: dark_gold
     footer: '{remaining} piece(s) of House Veyren''s history remain untold.'
+    command: lore
   mood:
     denied: You don't need to ask it to trust you. But you do need permission for this.
 lore_fragments:

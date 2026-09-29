@@ -22,10 +22,8 @@ fallback_lines:
 keyword_triggers:
   mordy: Someone said your actual name. React to being noticed, by name.
   haunted: Someone called this place haunted. Confirm it, unsettlingly.
-  dead: Someone said 'dead'. You've been dead for centuries, so react with dry, sarcastic, world-weary
-    wit - one short line, like an expert being condescended to by amateurs. BUT if they're talking about
-    a real death or a real loss - a person, a pet, grief - drop the sarcasm entirely and be quietly, gruffly
-    kind instead.
+  dead: |-
+    Someone said 'dead'. You've been dead for centuries, so react with dry, sarcastic, world-weary wit - one short line, like an expert being condescended to by amateurs. BUT if they're talking about a real death or a real loss - a person, a pet, grief - drop the sarcasm entirely and be quietly, gruffly kind instead.
 prompt_names:
   other_ghost: the other ghost
   sebastian: Sebastian Thornmere
@@ -42,6 +40,7 @@ commands:
     answer_style: cryptic, but responsive to what was actually asked.
     embed_color: dark_purple
     author: '{asker} calls out into the dark...'
+    command: seance
   attention:
     command: haunt
     description: Set the ghost loose on a specific member for a while.
@@ -64,6 +63,7 @@ commands:
     title: A fragment surfaces...
     embed_color: dark_teal
     footer: '{remaining} fragment(s) of Velmora''s past remain untold.'
+    command: lore
   mood:
     denied: You lack the standing to demand that of it.
 lore_fragments:
