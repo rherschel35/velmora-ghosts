@@ -13,31 +13,17 @@ GHOST_ID=vida python bot.py
 GHOST_ID=cassy python bot.py
 ```
 
-Characters ported so far:
+Characters ported so far (slash commands trimmed for live use):
 
-- **Mordy** from [mordyvelmora-ghost](https://github.com/rherschel35/mordyvelmora-ghost) —
-  `/seance`, `/haunt`, `/lore`, restless voice.
-- **Finley** from [FinleyVeyren-ghost](https://github.com/rherschel35/FinleyVeyren-ghost) —
-  `/seance`, `/watch` (protective), `/lore`, warmer voice.
-- **Maynard** from [Maynard-moonveil](https://github.com/rherschel35/Maynard-moonveil) —
-  `/ask`, `/watch` (mischief), `/experiment`, chaotic House Moonveil voice.
-  No `/interact` — he does not talk to the other ghosts.
-- **Sebastian** from [Sebastian-Thornmere](https://github.com/rherschel35/Sebastian-Thornmere) —
-  `/ask`, `/pun`, `/mazejournal`, shy Thornmere voice. No `/interact` and
-  no attention command (`/haunt`/`/watch`). Replies `SKIP` to stay quiet.
-- **Vida** from [Vida-Vashara](https://github.com/rherschel35/Vida-Vashara) —
-  `/ask`, `/tend` (gentle check-ins), `/remedy`, warm House Vashara voice.
-  No `/interact` — she ignores other ghost bots. Keyword phrases include
-  `vida`, `i don't feel well`, and `can't sleep` (all always-on).
-- **Cassy** from [Cassie-Caldrin](https://github.com/rherschel35/Cassie-Caldrin) —
-  `/ask`, `/watch` (curious Caldrin check-ins), `/invention`, teen inventor voice.
-  **`/interact`** with **Mordy or Finley only** (two peer bots). Keywords:
-  `cassy` / `cassie`, `experiment`, `explosion`.
+- **Mordy** — `/haunt` + `/stophaunt` (**Headmasters only**).
+- **Finley** — `/flirt` + `/stopflirt` (**Headmasters only**).
+- **Cassy** — `/invention` (anyone).
+- **Sebastian** — `/pun` (anyone).
+- **Vida** — `/tend` (anyone).
+- **Maynard** — **no slash commands**; short chaotic asides + puns in chat only.
 
-With the matching `GHOST_ID`, each ghost's system prompt, moods, keywords,
-lore fragments, history pairings, and slash-command names match its original
-bot. Keyword triggers may carry optional `chance` weights (Maynard's
-`what if` / `prank` fire ~25%; his name is always-on).
+Passive keywords, moods, and system prompts still live in each
+`characters/<id>.yaml`.
 
 ## Layout
 
@@ -48,12 +34,12 @@ engine/                # shared Discord + Claude engine
   config.py            # GHOST_ID → characters/<id>.yaml
   cogs/                # personality, haunting, commands, diary
 characters/
-  mordy.yaml           # Mordy: /seance /haunt /lore
-  finley.yaml          # Finley: /seance /watch /lore
-  maynard.yaml         # Maynard: /ask /watch /experiment
-  sebastian.yaml       # Sebastian: /ask /pun /mazejournal
-  vida.yaml            # Vida: /ask /tend /remedy
-  cassy.yaml           # Cassy: /ask /watch /invention /interact
+  mordy.yaml           # Mordy: /haunt /stophaunt (headmasters)
+  finley.yaml          # Finley: /flirt /stopflirt (headmasters)
+  maynard.yaml         # Maynard: no slash commands
+  sebastian.yaml       # Sebastian: /pun
+  vida.yaml            # Vida: /tend
+  cassy.yaml           # Cassy: /invention
 data/lore/             # shared across every ghost
   velmora_lore.json    # canonical biographies
   shared_history.json  # cross-ghost story bank
@@ -78,8 +64,8 @@ Discord bot process per ghost:
 Each service gets its own variables and (recommended) its own volume:
 
 - **Shared by the image:** engine code, `data/lore/`, every `characters/*.yaml`.
-- **Per service:** `GHOST_ID`, `DISCORD_TOKEN`, optional `OTHER_GHOST_*` peer
-  bot IDs, `HAUNT_CHANNEL_IDS`, `ALLOWED_GUILD_IDS`, `STATE_DIR`.
+- **Per service:** `GHOST_ID`, `DISCORD_TOKEN`, optional `HAUNT_CHANNEL_IDS`,
+  `ALLOWED_GUILD_IDS`, `STATE_DIR`, `HEADMASTER_ROLE_ID` (Mordy/Finley/Maynard).
 - **Per service volume:** mount at `STATE_DIR` (e.g. `/data`) so
   `memory_store.json` survives redeploys. Do **not** mount over `data/lore/`
   or the shared biographies disappear at runtime.
@@ -91,10 +77,7 @@ Each service gets its own variables and (recommended) its own volume:
 | `GHOST_ID` | `mordy` |
 | `DISCORD_TOKEN` | Mordy's Discord bot token |
 | `ANTHROPIC_API_KEY` | shared project variable is fine |
-| `OTHER_GHOST_1_ID` | Finley's Discord **user** id (bot account) |
-| `OTHER_GHOST_1_NAME` | `Finley Veyren` (optional; YAML default) |
-| `OTHER_GHOST_2_ID` | Cassy's Discord user id |
-| `OTHER_GHOST_2_NAME` | `Cassy Caldrin` (optional) |
+| `HEADMASTER_ROLE_ID` | optional; YAML defaults to the Headmasters role |
 | `STATE_DIR` | volume mount path, e.g. `/data` |
 | `HAUNT_CHANNEL_IDS` | optional channel allowlist |
 | `ALLOWED_GUILD_IDS` | optional guild allowlist |
@@ -108,39 +91,26 @@ Same image as Mordy; only the service variables change:
 | `GHOST_ID` | `finley` |
 | `DISCORD_TOKEN` | Finley's Discord bot token (different app from Mordy) |
 | `ANTHROPIC_API_KEY` | shared project variable is fine |
-| `OTHER_GHOST_1_ID` | Mordy's Discord **user** id |
-| `OTHER_GHOST_1_NAME` | `Mordy Velmora` (optional; YAML default) |
-| `OTHER_GHOST_2_ID` | Cassy's Discord user id |
-| `OTHER_GHOST_2_NAME` | `Cassy Caldrin` (optional) |
+| `HEADMASTER_ROLE_ID` | optional; YAML defaults to the Headmasters role |
 | `STATE_DIR` | **separate** volume from Mordy's, e.g. `/data` |
 | `HAUNT_CHANNEL_IDS` | optional channel allowlist |
 | `ALLOWED_GUILD_IDS` | optional guild allowlist |
 
-`GHOST_ID=finley` loads `characters/finley.yaml`, so this service exposes
-`/watch` (not `/haunt`), Finley's moods/keywords, and House Veyren lore.
+`GHOST_ID=finley` loads `characters/finley.yaml` — **`/flirt`** and
+**`/stopflirt`** for Headmasters only.
 
 ### Service 3 — Cassy
-
-Same image; Cassy is the ghost with **two** `/interact` targets (Mordy and Finley only):
 
 | Variable | Example / notes |
 | --- | --- |
 | `GHOST_ID` | `cassy` |
 | `DISCORD_TOKEN` | Cassy's Discord bot token (her own Discord app) |
 | `ANTHROPIC_API_KEY` | shared project variable is fine |
-| `OTHER_GHOST_1_ID` | Mordy's Discord **user** id (bot account) |
-| `OTHER_GHOST_1_NAME` | `Mordy Velmora` (optional; YAML default) |
-| `OTHER_GHOST_2_ID` | Finley's Discord user id |
-| `OTHER_GHOST_2_NAME` | `Finley Veyren` (optional) |
 | `STATE_DIR` | **separate** volume (e.g. mount as `/data` or your existing `cassy-memory` path) |
 | `HAUNT_CHANNEL_IDS` | optional channel allowlist |
 | `ALLOWED_GUILD_IDS` | optional guild allowlist |
 
-`GHOST_ID=cassy` loads `characters/cassy.yaml` and registers **`/ask`**,
-**`/watch`**, **`/invention`**, **`/mood`**, and **`/interact`** (choices:
-Mordy Velmora or Finley Veyren). Cross-ghost exchanges use the shared
-`GHOST_TAGS` address tags so only the ghost being called answers in a
-three-bot channel.
+`GHOST_ID=cassy` registers **`/invention` only** (anyone can use it).
 
 ### Service 5 — Maynard
 
@@ -156,14 +126,10 @@ Same image again; Maynard does **not** use `OTHER_GHOST_*` (no `/interact`):
 | `ALLOWED_GUILD_IDS` | optional guild allowlist |
 | `HEADMASTER_ROLE_ID` | optional; YAML defaults to the Velmora Headmasters role |
 
-`GHOST_ID=maynard` loads `characters/maynard.yaml` and registers
-`/ask`, `/watch`, `/experiment`, `/mood` (no `/interact`). His `/watch` is
-mischief-interest, not Finley's protective watch. Keyword cues: `maynard`
-(always), `what if` / `prank` (~25% chance each).
+`GHOST_ID=maynard` loads `characters/maynard.yaml` with **no slash commands**.
+He still reacts in chat (name / rare keywords) — short chaos and puns only.
 
 ### Service 4 — Sebastian
-
-Same image; Sebastian has **no** attention command and **no** `/interact`:
 
 | Variable | Example / notes |
 | --- | --- |
@@ -175,15 +141,10 @@ Same image; Sebastian has **no** attention command and **no** `/interact`:
 | `ALLOWED_GUILD_IDS` | optional guild allowlist |
 | `HOUSE_ROLE_ID` | optional; defaults to the Thornmere house role in YAML |
 
-`GHOST_ID=sebastian` loads `characters/sebastian.yaml` and registers
-**`/ask`**, **`/pun`**, **`/mazejournal`**, **`/mood` only**. He answers to
-`sebastian` (shy, or passionate if the talk is about the tournament), rarely
-chimes in with a pun (`SKIP` = stay quiet), and is warmer with Thornmere
-housemates. He ignores every other bot.
+`GHOST_ID=sebastian` registers **`/pun` only**. Passive reactions may still
+`SKIP` (send nothing).
 
 ### Service 6 — Vida
-
-Same image; Vida has **no** `/interact` and **no** `OTHER_GHOST_*` vars:
 
 | Variable | Example / notes |
 | --- | --- |
@@ -194,10 +155,7 @@ Same image; Vida has **no** `/interact` and **no** `OTHER_GHOST_*` vars:
 | `HAUNT_CHANNEL_IDS` | optional channel allowlist |
 | `ALLOWED_GUILD_IDS` | optional guild allowlist |
 
-`GHOST_ID=vida` loads `characters/vida.yaml` and registers **`/ask`**,
-**`/tend`**, **`/remedy`**, **`/mood`**. She reacts to her name and the
-phrases `i don't feel well` and `can't sleep`, gives gentler passive
-check-ins after `/tend`, and ignores every other bot.
+`GHOST_ID=vida` registers **`/tend` only**.
 
 Typical Railway setup:
 
@@ -231,56 +189,31 @@ otherwise global sync which can take up to an hour the first time).
 
 ## Commands
 
-**Mordy** (`GHOST_ID=mordy`):
+**Mordy** (`GHOST_ID=mordy`) — Headmasters only:
 
-- `/seance question:<text>` — ask the ghost; cryptic in-character answer.
-- `/haunt user:<@member>` — fixates on that member for a while.
-- `/lore` — next unrevealed fragment of Velmora's backstory.
-- `/mood` — (admin) peek at the current mood.
-- `/interact who:<ghost>` — brief public exchange with Finley or Cassy.
+- `/haunt user:<@member>` — sets him loose on that member for a while.
+- `/stophaunt user:<@member>` — calls him off.
 
-**Finley** (`GHOST_ID=finley`):
+**Finley** (`GHOST_ID=finley`) — Headmasters only:
 
-- `/seance question:<text>` — ask the Veyren ghost; warm, direct answer.
-- `/watch user:<@member>` — quietly watches over that member for a while.
-- `/lore` — next piece of House Veyren's history.
-- `/mood` — (admin) peek at the current mood.
-- `/interact who:<ghost>` — brief public exchange with Mordy or Cassy.
+- `/flirt user:<@member>` — he flirts with that member for a while.
+- `/stopflirt user:<@member>` — tells him to stop.
 
-**Cassy** (`GHOST_ID=cassy`):
+**Cassy** (`GHOST_ID=cassy`) — anyone:
 
-- `/ask question:<text>` — ask Cassy; warm, sharp, teenage-inventor answer.
-- `/watch user:<@member>` — she keeps a curious eye on them for a while.
 - `/invention` — one of her old patents or inventions.
-- `/mood` — (admin) peek at the current mood.
-- `/interact who:<ghost>` — brief public exchange with **Mordy Velmora** or **Finley Veyren** only.
+
+**Sebastian** (`GHOST_ID=sebastian`) — anyone:
+
+- `/pun [topic]` — one gentle groan-worthy pun.
+
+**Vida** (`GHOST_ID=vida`) — anyone:
+
+- `/tend member:<@member>` — she quietly looks in on them for a while.
 
 **Maynard** (`GHOST_ID=maynard`):
 
-- `/ask question:<text>` — ask Maynard; gleeful, curious answer.
-- `/watch member:<@member>` — picks them as his next harmless-mischief target.
-- `/experiment` — an entry from his old journals of (alleged) experiments.
-- `/mood` — (admin) peek at the current mood.
-- No `/interact` — he keeps to the students and ignores other ghost bots.
-
-**Sebastian** (`GHOST_ID=sebastian`):
-
-- `/ask question:<text>` — ask Sebastian; shy, gentle answer (tournament talk unlocks passion).
-- `/pun [topic]` — coax one gentle groan-worthy pun out of him.
-- `/mazejournal` — a page from his old maze journals plus his shy reaction.
-- `/mood` — (admin) peek at the current mood.
-- No `/haunt` or `/watch`, and no `/interact` — he ignores other bots entirely.
-  Unasked reactions may reply `SKIP` (send nothing).
-
-**Vida** (`GHOST_ID=vida`):
-
-- `/ask question:<text>` — ask Vida; warm, affectionate answer.
-- `/tend member:<@member>` — she quietly looks in on them for a while.
-- `/remedy` — an old memory or remedy from her healing days.
-- `/mood` — (admin) peek at the current mood.
-- No `/interact` — she keeps to the students and ignores other ghost bots.
-  Passive reactions follow `/tend`; keywords include `vida`, `i don't feel well`,
-  and `can't sleep`.
+- No slash commands. Chat-only: short chaos / puns; rare keyword hits.
 
 ## Notes
 

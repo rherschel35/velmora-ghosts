@@ -336,6 +336,15 @@ class Personality(DiaryMixin, commands.Cog):
         self.state.setdefault("haunt_targets", {})[str(user_id)] = time.time() + duration_seconds
         self.save_state()
 
+    def clear_haunt_target(self, user_id: int) -> bool:
+        """Remove attention on a member. Returns True if they were being targeted."""
+        targets = self.state.setdefault("haunt_targets", {})
+        if str(user_id) not in targets:
+            return False
+        del targets[str(user_id)]
+        self.save_state()
+        return True
+
     def is_haunted(self, user_id: int) -> bool:
         expiry = self.state.get("haunt_targets", {}).get(str(user_id))
         if not expiry:
