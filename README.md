@@ -6,12 +6,19 @@ Boot any ghost with `GHOST_ID`:
 
 ```bash
 GHOST_ID=mordy python bot.py
+GHOST_ID=finley python bot.py
 ```
 
-Mordy is the first character ported from
-[mordyvelmora-ghost](https://github.com/rherschel35/mordyvelmora-ghost). With
-`GHOST_ID=mordy`, his system prompt, moods, keyword reactions, lore fragments,
-history pairings, and `/interact` partners match that bot.
+Characters ported so far:
+
+- **Mordy** from [mordyvelmora-ghost](https://github.com/rherschel35/mordyvelmora-ghost) —
+  `/haunt`, restless voice.
+- **Finley** from [FinleyVeyren-ghost](https://github.com/rherschel35/FinleyVeyren-ghost) —
+  `/watch` (House Veyren attention), warmer voice.
+
+With the matching `GHOST_ID`, each ghost's system prompt, moods, keywords,
+lore fragments, history pairings, attention command, and `/interact` partners
+match its original bot.
 
 ## Layout
 
@@ -22,7 +29,8 @@ engine/                # shared Discord + Claude engine
   config.py            # GHOST_ID → characters/<id>.yaml
   cogs/                # personality, haunting, commands, diary
 characters/
-  mordy.yaml           # Mordy-specific voice + config
+  mordy.yaml           # Mordy-specific voice + /haunt
+  finley.yaml          # Finley-specific voice + /watch
 data/lore/             # shared across every ghost
   velmora_lore.json    # canonical biographies
   shared_history.json  # cross-ghost story bank
@@ -38,7 +46,7 @@ Discord bot process per ghost:
 | Railway service | `GHOST_ID` | Character file |
 | --- | --- | --- |
 | Mordy | `mordy` | `characters/mordy.yaml` |
-| Finley | `finley` | *(add `characters/finley.yaml`)* |
+| Finley | `finley` | `characters/finley.yaml` |
 | Cassy | `cassy` | *(add `characters/cassy.yaml`)* |
 | Sebastian | `sebastian` | *(add `characters/sebastian.yaml`)* |
 | Maynard | `maynard` | *(add `characters/maynard.yaml`)* |
@@ -53,6 +61,41 @@ Each service gets its own variables and (recommended) its own volume:
   `memory_store.json` survives redeploys. Do **not** mount over `data/lore/`
   or the shared biographies disappear at runtime.
 
+### Service 1 — Mordy
+
+| Variable | Example / notes |
+| --- | --- |
+| `GHOST_ID` | `mordy` |
+| `DISCORD_TOKEN` | Mordy's Discord bot token |
+| `ANTHROPIC_API_KEY` | shared project variable is fine |
+| `OTHER_GHOST_1_ID` | Finley's Discord **user** id (bot account) |
+| `OTHER_GHOST_1_NAME` | `Finley Veyren` (optional; YAML default) |
+| `OTHER_GHOST_2_ID` | Cassy's Discord user id |
+| `OTHER_GHOST_2_NAME` | `Cassy Caldrin` (optional) |
+| `STATE_DIR` | volume mount path, e.g. `/data` |
+| `HAUNT_CHANNEL_IDS` | optional channel allowlist |
+| `ALLOWED_GUILD_IDS` | optional guild allowlist |
+
+### Service 2 — Finley
+
+Same image as Mordy; only the service variables change:
+
+| Variable | Example / notes |
+| --- | --- |
+| `GHOST_ID` | `finley` |
+| `DISCORD_TOKEN` | Finley's Discord bot token (different app from Mordy) |
+| `ANTHROPIC_API_KEY` | shared project variable is fine |
+| `OTHER_GHOST_1_ID` | Mordy's Discord **user** id |
+| `OTHER_GHOST_1_NAME` | `Mordy Velmora` (optional; YAML default) |
+| `OTHER_GHOST_2_ID` | Cassy's Discord user id |
+| `OTHER_GHOST_2_NAME` | `Cassy Caldrin` (optional) |
+| `STATE_DIR` | **separate** volume from Mordy's, e.g. `/data` |
+| `HAUNT_CHANNEL_IDS` | optional channel allowlist |
+| `ALLOWED_GUILD_IDS` | optional guild allowlist |
+
+`GHOST_ID=finley` loads `characters/finley.yaml`, so this service exposes
+`/watch` (not `/haunt`), Finley's moods/keywords, and House Veyren lore.
+
 Typical Railway setup:
 
 1. Create one Railway project for Velmora.
@@ -60,8 +103,10 @@ Typical Railway setup:
 3. Duplicate the service five more times (or add five empty services pointing
    at the same repo / same image).
 4. On each service, set `GHOST_ID` and that ghost's `DISCORD_TOKEN` (and
-   `ANTHROPIC_API_KEY`, usually as a shared variable).
-5. Attach a volume to each service and set `STATE_DIR` to the mount path.
+   `ANTHROPIC_API_KEY`, usually as a shared variable). Copy the tables above
+   for Mordy and Finley; add the remaining four as their YAMLs land.
+5. Attach a **separate** volume to each service and set `STATE_DIR` to the
+   mount path.
 
 Same commit → same image → six independent bots. Adding a seventh ghost is a
 new YAML under `characters/` plus another Railway service with a new
@@ -74,20 +119,30 @@ new YAML under `characters/` plus another Railway service with a new
    - Invite it with the `bot` and `applications.commands` scopes, and at least:
      View Channels, Send Messages, Read Message History.
 2. `cp .env.example .env` and fill in `DISCORD_TOKEN`, `ANTHROPIC_API_KEY`,
-   and `GHOST_ID=mordy`.
+   and `GHOST_ID` (`mordy` or `finley`).
 3. `pip install -r requirements.txt`
 4. `python bot.py` (or `python -m engine`)
 
 Slash commands sync on startup (guild-instant if you set `DEV_GUILD_ID`,
 otherwise global sync which can take up to an hour the first time).
 
-## Commands (Mordy)
+## Commands
 
-- `/seance question:<text>` — ask the ghost something; it answers in character.
-- `/haunt user:<@member>` — it fixates on that member for a while.
+**Mordy** (`GHOST_ID=mordy`):
+
+- `/seance question:<text>` — ask the ghost; cryptic in-character answer.
+- `/haunt user:<@member>` — fixates on that member for a while.
 - `/lore` — next unrevealed fragment of Velmora's backstory.
 - `/mood` — (admin) peek at the current mood.
 - `/interact who:<ghost>` — brief public exchange with Finley or Cassy.
+
+**Finley** (`GHOST_ID=finley`):
+
+- `/seance question:<text>` — ask the Veyren ghost; warm, direct answer.
+- `/watch user:<@member>` — quietly watches over that member for a while.
+- `/lore` — next piece of House Veyren's history.
+- `/mood` — (admin) peek at the current mood.
+- `/interact who:<ghost>` — brief public exchange with Mordy or Cassy.
 
 ## Notes
 

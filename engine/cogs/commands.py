@@ -1,15 +1,11 @@
 """
-Slash commands for interacting with the ghost directly:
+Slash commands for interacting with the ghost directly.
 
-- /seance <question>  - ask it something, get a cryptic in-character answer
-- /haunt <user>        - it starts randomly slipping into that member's
-                          conversations for a while
-- /lore                - request the next unrevealed fragment of Velmora's
-                          backstory
-- /mood                - (admin-only) peek at the ghost's current mood
-- /interact            - call out to another ghost bot for a brief,
-                          capped public exchange (only when the character
-                          config lists interact_partners)
+Command names and copy come from characters/<GHOST_ID>.yaml:
+- /seance
+- attention command: /haunt (Mordy) or /watch (Finley)
+- /lore, /mood
+- /interact (when interact_partners are configured)
 """
 
 from __future__ import annotations
@@ -27,14 +23,21 @@ from engine.config import GHOST_TAGS, INTERACT_MARKER
 
 log = logging.getLogger("velmora.commands")
 
-HAUNT_DURATION_SECONDS = 60 * 60 * 6  # 6 hours
+ATTENTION_DURATION_SECONDS = 60 * 60 * 6  # 6 hours
+
+
+def _embed_color(name: str) -> discord.Color:
+    getter = getattr(discord.Color, name, None)
+    if callable(getter):
+        return getter()
+    return discord.Color.dark_grey()
 
 
 class GhostCommands(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.ghost = bot.ghost
-        self.lore = list(self.ghost.lore_fragments)
+        self.lore_fragments = list(self.ghost.lore_fragments)
 
     def _personality(self):
         return self.bot.get_cog("Personality")
@@ -66,7 +69,7 @@ class GhostCommands(commands.Cog):
         personality = self._personality()
         if not personality:
             await interaction.response.send_message(
-                "The circle will not form tonight.", ephemeral=True
+                self.ghost.cmd("seance", "unavailable"), ephemeral=True
             )
             return
 
@@ -78,48 +81,60 @@ class GhostCommands(commands.Cog):
         if prior:
             memory_hint = prior[0]
 
+        answer_style = self.ghost.cmd(
+            "seance",
+            "answer_style",
+            "cryptic, but responsive to what was actually asked.",
+        )
         cue = (
             f'{asker} has called a seance and asks you directly: "{question}". '
-            "Answer as the ghost - cryptic, but responsive to what was actually asked."
+            f"Answer as the ghost - {answer_style}"
         )
         line = await personality.speak(cue, memory_hint=memory_hint, max_tokens=220)
 
         embed = discord.Embed(
             description=line,
-            color=discord.Color.dark_purple(),
+            color=_embed_color(self.ghost.cmd("seance", "embed_color", "dark_purple")),
         )
-        embed.set_author(name=f"{asker} calls out into the dark...")
+        author = self.ghost.cmd(
+            "seance", "author", "{asker} calls out into the dark..."
+        ).format(asker=asker)
+        embed.set_author(name=author)
         await interaction.followup.send(embed=embed)
 
-    @app_commands.command(name="haunt", description="Set the ghost loose on a specific member for a while.")
+    @app_commands.command(
+        name="haunt",
+        description="Set the ghost loose on a specific member for a while.",
+    )
     @app_commands.describe(user="Who should the ghost fixate on?")
-    async def haunt(self, interaction: discord.Interaction, user: discord.Member):
+    async def attention(self, interaction: discord.Interaction, user: discord.Member):
+        """Attention mechanic — renamed to /haunt or /watch in setup()."""
         personality = self._personality()
         if not personality:
             await interaction.response.send_message(
-                "It does not answer to that name.", ephemeral=True
+                self.ghost.cmd("attention", "unavailable"), ephemeral=True
             )
             return
 
         if user.bot:
             await interaction.response.send_message(
-                "It has no interest in the hollow ones.", ephemeral=True
+                self.ghost.cmd("attention", "no_bots"), ephemeral=True
             )
             return
 
-        personality.set_haunt_target(user.id, HAUNT_DURATION_SECONDS)
+        personality.set_haunt_target(user.id, ATTENTION_DURATION_SECONDS)
 
-        cue = (
-            f"You have just been set loose to haunt {user.display_name} specifically, for a while. "
-            "Announce, in character, that you've noticed them - a warning or a promise, not an explanation."
-        )
+        cue = self.ghost.cmd("attention", "cue").format(user=user.display_name)
         line = await personality.speak(cue, max_tokens=150)
 
         embed = discord.Embed(
             description=line,
-            color=discord.Color.dark_red(),
+            color=_embed_color(self.ghost.cmd("attention", "embed_color", "dark_red")),
         )
-        embed.set_footer(text=f"The ghost's attention now turns to {user.display_name}.")
+        footer = self.ghost.cmd(
+            "attention", "footer", "The ghost's attention now turns to {user}."
+        ).format(user=user.display_name)
+        embed.set_footer(text=footer)
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="lore", description="Ask the ghost to reveal a fragment of Velmora's past.")
@@ -127,37 +142,38 @@ class GhostCommands(commands.Cog):
         personality = self._personality()
         if not personality:
             await interaction.response.send_message(
-                "The past stays buried tonight.", ephemeral=True
+                self.ghost.cmd("lore", "unavailable"), ephemeral=True
             )
             return
 
         await interaction.response.defer(thinking=True)
 
-        fragment = personality.next_lore_fragment(self.lore)
+        fragment = personality.next_lore_fragment(self.lore_fragments)
         if fragment is None:
             line = await personality.speak(
-                "Someone has asked you to reveal more of your past, but you have already told "
-                "them everything you're willing to. Deflect, in character - refuse without "
-                "explaining that you've run out of material.",
+                self.ghost.cmd("lore", "exhausted_cue"),
                 max_tokens=120,
             )
             embed = discord.Embed(description=line, color=discord.Color.dark_grey())
             await interaction.followup.send(embed=embed)
             return
 
-        cue = (
-            f'Reveal this fragment of your past to whoever is listening, in your own voice, '
-            f'not verbatim but true to it: "{fragment}"'
-        )
+        cue = self.ghost.cmd("lore", "share_cue").format(fragment=fragment)
         line = await personality.speak(cue, max_tokens=200)
 
+        remaining = len(self.lore_fragments) - personality.state.get("lore_index", 0)
         embed = discord.Embed(
-            title="A fragment surfaces...",
+            title=self.ghost.cmd("lore", "title", "A fragment surfaces..."),
             description=line,
-            color=discord.Color.dark_teal(),
+            color=_embed_color(self.ghost.cmd("lore", "embed_color", "dark_teal")),
         )
-        remaining = len(self.lore) - personality.state.get("lore_index", 0)
-        embed.set_footer(text=f"{remaining} fragment(s) of Velmora's past remain untold.")
+        embed.set_footer(
+            text=self.ghost.cmd(
+                "lore",
+                "footer",
+                "{remaining} fragment(s) of Velmora's past remain untold.",
+            ).format(remaining=remaining)
+        )
         await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="mood", description="(admin) Peek at the ghost's current mood.")
@@ -177,7 +193,12 @@ class GhostCommands(commands.Cog):
     async def mood_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, app_commands.MissingPermissions):
             await interaction.response.send_message(
-                "You lack the standing to demand that of it.", ephemeral=True
+                self.ghost.cmd(
+                    "mood",
+                    "denied",
+                    "You lack the standing to demand that of it.",
+                ),
+                ephemeral=True,
             )
         else:
             log.exception("Unhandled error in /mood", exc_info=error)
@@ -232,7 +253,28 @@ class GhostCommands(commands.Cog):
 
 async def setup(bot: commands.Bot):
     cog = GhostCommands(bot)
-    partners = bot.ghost.interact_partners
+    ghost = bot.ghost
+
+    # Wire attention command name + copy from character YAML (/haunt or /watch).
+    attention_name = ghost.attention_command()
+    cog.attention.name = attention_name
+    cog.attention.description = ghost.cmd(
+        "attention",
+        "description",
+        cog.attention.description,
+    )
+    if "user" in cog.attention._params:
+        cog.attention._params["user"].description = ghost.cmd(
+            "attention",
+            "user_describe",
+            "Who should the ghost fixate on?",
+        )
+
+    # Seance / lore descriptions from character YAML.
+    cog.seance.description = ghost.cmd("seance", "description", cog.seance.description)
+    cog.lore.description = ghost.cmd("lore", "description", cog.lore.description)
+
+    partners = ghost.interact_partners
     if partners:
         choices = [app_commands.Choice(name=p.name, value=p.id) for p in partners]
         cog.interact_command._params["who"].choices = choices
