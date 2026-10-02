@@ -61,9 +61,9 @@
   },
   "maynard": {
     "name": "Maynard Moonveil",
-    "house": "House Moonveil",
+    "house": "House AsterWilde (once Moonveil)",
     "facts": [
-      "Founder of House Moonveil. Arrived roughly a century after House Vashara was already established.",
+      "Founder of House Moonveil - the house that later grew into AsterWilde. Arrived roughly a century after House Vashara (now Oakmont) was already established. Moonveil never stopped existing; the living house grew into a new name.",
       "Asked a question nobody else had: if healing magic can mend a broken bone, why not a broken chair leg? He spent his early years repairing cracked stonework, torn tapestries and shattered glass - better than new. It bored him almost immediately.",
       "Repair became creation, creation became experimentation, and experimentation eventually became social experiments run on the students and staff around him. Not maliciously - he never had a cruel bone in his body - just relentlessly.",
       "That curiosity hardened into a permanent personality: a full-blown prankster who considered every prank a properly conducted study, and the school's foremost expert in controlled chaos.",
@@ -74,9 +74,9 @@
       "He never built it. He recognized what he had made was too dangerous to actually run, showed uncharacteristic restraint, sealed the design in journals nobody was meant to open, and moved on to smaller mischief.",
       "He is the only ghost tied to Velmora with no tragedy in his story at all. He lived a long, joyful life and died old, satisfied, and almost certainly still laughing at something only he found funny.",
       "After his death, his followers went through his journals, found the tournament, and built it exactly as designed, in perfect good faith. They never found the part where he had decided it should never exist. That tournament is the one that killed Finley Veyren.",
-      "House Moonveil's headmaster today is known as the Mad Hatter - a descendant of Maynard's, and by every account the closest thing to a reincarnation of his spirit that bloodline has produced."
+      "The living house is AsterWilde now - motto 'Wild Minds. Fierce Hearts. Beautiful Chaos.', crest a squirrel. Headmaster Sky holds the seat. The Mad Hatter, long associated with the old Moonveil chair and a descendant of Maynard's line, has retired but is still around campus - not vanished, just not in the seat."
     ],
-    "known_as": "The Moonveil ghost - prankster, inventor, chaos scientist, who unknowingly designed the tournament that would one day kill Finley."
+    "known_as": "The AsterWilde ghost (founder of what was once Moonveil) - prankster, inventor, chaos scientist, who unknowingly designed the tournament that would one day kill Finley."
   },
   "cassy": {
     "name": "Cassy Caldrin",
@@ -102,9 +102,9 @@
   },
   "vida": {
     "name": "Vida Vashara",
-    "house": "House Vashara",
+    "house": "House Oakmont (once Vashara)",
     "facts": [
-      "Founder of House Vashara - the first house Velmora ever recognized. Not a descendant of Mordy's era; she found him generations later, near the very end of his life.",
+      "Founder of House Vashara - the first house Velmora ever recognized, which later grew into Oakmont. Not a descendant of Mordy's era; she found him generations later, near the very end of his life. Vashara never stopped existing; the living house grew into a new name.",
       "Born into the Vasharas, a family of healers who guarded their methods jealously, passing them down only inside the family. She never made peace with that - if it worked, she believed, more people should have it.",
       "What she actually wanted, most of her early life, was to sing opera and travel while she did it, giving away everything she learned to anyone who'd listen. She left home in her early thirties to do exactly that, unmarried and untethered.",
       "She helped people everywhere her travels took her anyway - never charging, never hiding how she'd done it, teaching it openly to anyone who wanted to learn. Her gift grew every time she gave it away, the opposite of everything her family assumed about magic like hers.",
@@ -114,9 +114,10 @@
       "She also built a family of her own inside the school she'd been given - some children carried the healing forward, others took up the singing voice she'd never fully put down. She never made either inheritance feel like the lesser one.",
       "She died old, in her sleep, surrounded by nearly everyone she had ever loved and nearly everyone who had loved her back. Waking up as a ghost felt like an ordinary morning to her. She came back to Velmora because that was where the work had always been.",
       "She does not haunt the way the other ghosts do. She doesn't joke, doesn't needle, doesn't linger trading old history. She drifts to wherever someone is hurting quietly and privately, and offers comfort with no joke underneath it and nothing required in return.",
+      "The living house is Oakmont now - motto 'Rooted in Patient. Relentless in Purpose.', crest a grizzly bear, colors the same purple Vashara always wore. Headmaster Vish holds the seat. Blazing Mystic (often just Mystic), long tied to the old Vashara chair, has retired but is still around campus - not vanished, just not in the seat.",
       "She does not seek out the other ghosts, and by every account she never has - not even Cassy Caldrin, whom she is nonetheless deeply fond of from a distance. Mordy, Finley, Sebastian, Maynard, and Cassy all think of her as something closer to a mother than a peer. Her attention belongs to the living."
     ],
-    "known_as": "The Vashara ghost - founder of Velmora's first house, who cared for Mordy Velmora at the end of his life and now quietly comforts anyone in the school who is hurting."
+    "known_as": "The Oakmont ghost (founder of what was once Vashara) - who cared for Mordy Velmora at the end of his life and now quietly comforts anyone in the school who is hurting."
   },
   "forest_of_caden": {
     "title": "The Forest of Caden",
