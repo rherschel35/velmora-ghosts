@@ -114,9 +114,12 @@ def _load_velmora_lore(path: Path):
 def _build_lore_block(lore: dict, self_key: str) -> str:
     """Turn the shared lore file into a system-prompt section: this ghost's
     own life first (including any secret only it knows), then what it knows
-    about the others."""
+    about the others, then any shared forbidden stories."""
     if not lore:
         return ""
+
+    # Non-biography keys living alongside the ghost entries.
+    shared_story_keys = {"forest_of_caden"}
 
     sections = []
 
@@ -133,7 +136,9 @@ def _build_lore_block(lore: dict, self_key: str) -> str:
 
     others = []
     for key, entry in lore.items():
-        if key == self_key:
+        if key == self_key or key in shared_story_keys:
+            continue
+        if not isinstance(entry, dict) or "facts" not in entry:
             continue
         facts = "\n".join(f"  - {fact}" for fact in entry.get("facts", []))
         header = entry.get("name", key)
@@ -148,6 +153,21 @@ def _build_lore_block(lore: dict, self_key: str) -> str:
             "the history of your own home - some of it you lived alongside, some of it you inherited "
             "as story. Speak to any of it naturally if it comes up, and never contradict it:\n\n"
             + "\n\n".join(others)
+        )
+
+    caden = lore.get("forest_of_caden")
+    if isinstance(caden, dict):
+        title = caden.get("title") or "The Forest of Caden"
+        summary = "\n".join(f"- {line}" for line in caden.get("summary") or [])
+        rules = "\n".join(f"- {line}" for line in caden.get("never_tell") or [])
+        stance = (caden.get("stances") or {}).get(self_key) or (
+            "You will not tell this story. It is not yours."
+        )
+        sections.append(
+            f"A STORY YOU KNOW AND WILL NOT TELL - {title.upper()}.\n"
+            f"What you may acknowledge exists:\n{summary}\n"
+            f"Hard rules:\n{rules}\n"
+            f"YOUR SIDE OF THE DIVIDE:\n- {stance}"
         )
 
     return "\n\n" + "\n\n".join(sections)
